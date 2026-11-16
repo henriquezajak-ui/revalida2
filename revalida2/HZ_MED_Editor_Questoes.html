@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b18">
+<meta name="hz-med-api-contract" content="integrated-codegs-v1">
+<title>HZ MED · Editor de Questões e Resumos</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root{color-scheme:dark;--bg:#0b0b14;--panel:#141421;--panel2:#1b1b2b;--line:#2d2d43;--muted:#a4a4b8;--purple:#9b6bff;--green:#35c77b;--red:#fa6868;--amber:#f5bd50}
+  *{box-sizing:border-box} html,body{margin:0;min-height:100%;background:var(--bg);color:#f4f2ff;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+  body{background:radial-gradient(1000px 500px at 80% -10%,rgba(125,78,255,.17),transparent 65%),var(--bg)}
+  .shell{max-width:1500px;margin:auto;padding:22px clamp(12px,2vw,28px) 60px}
+  .panel{background:rgba(20,20,33,.94);border:1px solid var(--line);border-radius:20px;box-shadow:0 16px 40px rgba(0,0,0,.17)}
+  .field{width:100%;background:#0e0e19;border:1px solid #36364d;border-radius:11px;color:#f5f3ff;padding:11px 13px;outline:none;min-width:0}
+  .field:focus,.rich:focus{border-color:#9b6bff;box-shadow:0 0 0 3px rgba(155,107,255,.14)}
+  .btn{border:1px solid #41415b;border-radius:11px;padding:10px 14px;font-size:13px;font-weight:800;transition:.15s;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+  .btn:hover{filter:brightness(1.12);transform:translateY(-1px)}.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .primary{background:#7545db;border-color:#8d62ed;color:white}.secondary{background:#222238;color:#e9e4ff}.success{background:#126b43;border-color:#238b5e;color:white}.danger{background:#641f2b;border-color:#a73b4b;color:#fff}.warning{background:#624514;border-color:#9b7228;color:#fff}.ghost{background:transparent;color:#c9c4db}
+  .tab{padding:10px 16px;border-radius:11px;color:#b8b4c9;font-weight:800;font-size:13px;border:1px solid transparent}.tab.active{background:#29213d;color:white;border-color:#704ab7}
+  .rich{min-height:140px;max-height:430px;overflow:auto;white-space:normal;overflow-wrap:anywhere;background:#0d0d18;border:1px solid #37374e;border-radius:12px;padding:15px;line-height:1.65;outline:none}.rich-import{min-height:240px;max-height:520px;border:1px dashed #765bb1;background:#10101d}.rich-import:focus{border-style:solid}.rich-import table{min-width:280px}.rich-import td,.rich-import th{min-width:70px}.rich-import img{max-width:min(100%,900px)}
+  .rich:empty:before{content:attr(data-placeholder);color:#77778e;pointer-events:none}.rich img{max-width:100%;height:auto;border-radius:9px}.rich table{border-collapse:collapse;width:100%;margin:10px 0}.rich td,.rich th{border:1px solid #777;padding:7px}.rich blockquote{border-left:4px solid #9b6bff;padding:8px 14px;background:rgba(155,107,255,.1);border-radius:6px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#1b1b2b;border:1px solid #38384e;border-radius:12px;margin-bottom:8px}.tool{min-width:34px;height:33px;padding:0 9px;border:1px solid #41415b;border-radius:8px;background:#24243a;color:#eee9ff;font-size:12px;font-weight:800}.tool:hover{background:#38304e}.tool-select{height:33px;max-width:145px;background:#10101b;border:1px solid #41415b;border-radius:8px;color:#eee;padding:0 8px;font-size:12px}
+  .option{display:grid;grid-template-columns:46px minmax(0,1fr);gap:10px;align-items:start;background:#10101b;border:1px solid #34344b;border-radius:13px;padding:10px}.option-letter{display:flex;align-items:center;gap:7px;font-weight:900;color:#cbb9ff;padding-top:9px}.option .rich{min-height:60px;max-height:220px;padding:10px}
+  .meta{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-weight:900}
+  .status{padding:12px 14px;border-radius:12px;border:1px solid #41415b;background:#1a1a2a;font-size:13px;color:#d6d1e8}.status.ok{border-color:#206744;background:#102b1e;color:#b8f1d1}.status.err{border-color:#81303a;background:#32161c;color:#ffc4ca}.status.warn{border-color:#79591e;background:#332710;color:#ffe1a3}
+  .upload-progress{margin-top:14px;padding:12px 14px;border:1px solid #4c3b70;border-radius:13px;background:linear-gradient(135deg,rgba(91,54,145,.20),rgba(20,20,33,.92));box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+  .upload-progress .progress-track{height:10px;overflow:hidden;border-radius:999px;background:#080811;border:1px solid #39334b}
+  .upload-progress .progress-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#7545db,#b58cff,#58d6a0);transition:width .16s ease;box-shadow:0 0 14px rgba(155,107,255,.35)}
+  .upload-progress.indeterminate .progress-fill{width:34%!important;animation:hzUploadSlide 1.05s ease-in-out infinite alternate}
+  .upload-progress.error{border-color:#81303a;background:rgba(100,31,43,.25)}
+  .upload-progress.error .progress-fill{background:linear-gradient(90deg,#a83245,#fa6868)}
+  .upload-progress.success{border-color:#206744}
+  @keyframes hzUploadSlide{from{transform:translateX(-15%)}to{transform:translateX(210%)}}
+  .preview-content{line-height:1.7;overflow-wrap:anywhere}.preview-content img{max-width:100%;height:auto;border-radius:10px}.preview-content table{border-collapse:collapse;width:100%}.preview-content td,.preview-content th{border:1px solid #697086;padding:7px}.preview-option{border:1px solid #34344b;background:#141421;padding:12px;border-radius:12px;display:flex;gap:10px;align-items:flex-start}.preview-option.correct{border-color:#2f9b67;background:rgba(24,122,75,.16)}.preview-option.wrong{border-color:#b84d57;background:rgba(160,42,52,.13)}
+  .important-card{background:#34250d;border:1px solid #b98428;color:#ffedc2;border-radius:14px;padding:15px;margin:12px 0}.comment-card{background:#20232a;border:1px solid #596273;color:#e5e7eb;border-radius:14px;padding:15px;margin:12px 0}.explanation-card{background:#211a2d;border:1px solid #70509d;color:#eee4ff;border-radius:14px;padding:15px;margin:12px 0}.takehome-card{background:#14281f;border:1px solid #397c58;color:#d5f8e4;border-radius:14px;padding:15px;margin:12px 0}.reference-card{background:#172536;border:1px solid #42698e;color:#dceeff;border-radius:14px;padding:15px;margin:12px 0}.section-title{font-weight:950;letter-spacing:.02em;margin-bottom:9px}
+  .exam-card{border:1px solid #34344b;border-radius:15px;background:#10101c;padding:14px}.pill{font-size:10px;font-weight:900;letter-spacing:.05em;padding:5px 8px;border-radius:999px;background:#29213d;color:#d8c8ff}.muted{color:#a5a2b7}.tiny{font-size:11px}.hidden{display:none!important}
+  @media(max-width:850px){.split{grid-template-columns:1fr!important}.two{grid-template-columns:1fr!important}.top-actions{width:100%;justify-content:stretch}.top-actions .btn{flex:1}.shell{padding-top:12px}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl" style="background:linear-gradient(140deg,#a45cff,#6636ce);box-shadow:0 8px 24px #6e3bc455">HZ</div>
+      <div><div class="text-xl md:text-2xl font-black tracking-tight">HZ MED <span class="text-purple-300">· Editor de Conteúdo</span></div><div class="text-xs muted mt-1">Questões, Biblioteca de Resumos e organização do conteúdo médico</div></div>
+    </div>
+    <div class="top-actions flex flex-wrap gap-2"><button class="btn secondary" id="reloadDbTop">↻ Atualizar banco</button><button class="btn ghost" id="exportJson">⇩ Exportar rascunho</button><button class="btn ghost" id="importJsonBtn" type="button">⇧ Importar rascunho</button></div>
+  </header>
+
+  <div class="flex flex-wrap gap-2 mb-5">
+    <button class="tab active" data-tab="editor">✎ Criar / editar questões</button>
+    <button class="tab" data-tab="database">▦ Banco de Questões</button>
+    <button class="tab" data-tab="summaries">📚 Biblioteca de Resumos</button>
+  </div>
+
+  <section id="paneEditor" class="space-y-5">
+    <div class="panel p-4 md:p-5">
+      <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
+        <div><div class="text-lg font-black">Importar questões em texto</div><p class="text-sm muted mt-1">Cole uma ou várias questões. O reconhecimento separa enunciado, alternativas A–E, gabarito, justificativa e classificação.</p></div>
+        <span class="pill">PARSER HZ MED</span>
+      </div>
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2"><label class="meta" for="richPasteInput">Colar texto com imagens e tabelas</label><span class="tiny muted">Aceita conteúdo copiado do Word, navegador e documentos</span></div>
+      <div id="richPasteInput" class="rich rich-import" contenteditable="true" data-placeholder="Cole aqui a questão completa, incluindo imagens e tabelas. O editor preservará a formatação e separará enunciado, alternativas, gabarito e comentário..." aria-label="Área para colar questões com imagens e tabelas"></div>
+      <details class="mt-3"><summary class="text-xs muted cursor-pointer select-none">Importar somente texto simples (sem imagens incorporadas)</summary><textarea id="pasteInput" class="field mt-3" rows="7" placeholder="1) Enunciado da questão...&#10;A) Alternativa A&#10;B) Alternativa B&#10;C) Alternativa C&#10;D) Alternativa D&#10;Gabarito: C&#10;Justificativa: ..."></textarea></details>
+      <div class="flex flex-wrap gap-2 mt-3"><button class="btn primary" id="parseText">⚡ Analisar e separar questões</button><button class="btn secondary" id="clearPaste">Limpar conteúdo</button><span class="text-xs muted self-center" id="parseSummary">Nenhuma questão importada.</span></div>
+    </div>
+
+    <div class="grid split gap-5" style="grid-template-columns:minmax(0,1.12fr) minmax(360px,.88fr)">
+      <div class="space-y-5 min-w-0">
+        <section class="panel p-4 md:p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><div class="text-lg font-black">Dados da questão</div><div class="text-xs muted mt-1" id="questionCounter">Questão 0 de 0</div></div><div class="flex gap-2"><button class="btn secondary" id="prevQuestion">← Anterior</button><button class="btn secondary" id="nextQuestion">Próxima →</button></div></div>
+          <div class="grid two gap-3 mb-4" style="grid-template-columns:1fr 1fr">
+            <label class="block"><span class="meta block mb-2">Grupo / prova</span><input id="groupTitle" class="field" value="Revalida - INEP" placeholder="Ex.: Revalida - INEP"></label>
+            <label class="block"><span class="meta block mb-2">Origem / banca (Especialidade no texto)</span><input id="sourceName" class="field" value="Revalida - INEP" placeholder="Ex.: Revalida - INEP"></label>
+            <label class="block"><span class="meta block mb-2">Ano (opcional)</span><input id="year" class="field" placeholder="Ex.: 2026"></label>
+            <label class="block"><span class="meta block mb-2">Número exibido</span><input id="questionNumber" class="field" type="number" min="1" value="1"></label>
+          </div>
+          <label class="block mb-4"><span class="meta block mb-2">Tema hierárquico</span><input id="themePath" class="field" placeholder="Clínica Médica | Pneumologia | Hipertensão Pulmonar e TEP | TEP"><span class="tiny muted block mt-2">Use a sequência do mais amplo para o mais específico. O sistema deriva a especialidade principal da primeira parte do caminho.</span></label>
+          <label class="flex items-center gap-2 text-sm mb-4"><input id="shareWithBqhz" type="checkbox" class="accent-purple-500"><span>Também disponibilizar esta prova no BQHZ (Trilha/Desafio)</span></label>
+          <div class="mb-3"><div class="flex items-center justify-between gap-3 mb-2"><span class="meta">Enunciado</span><span class="tiny muted">Formatação compatível com o site</span></div><div class="toolbar" data-toolbar="stemEditor"></div><div id="stemEditor" class="rich" contenteditable="true" data-placeholder="Digite ou cole o enunciado da questão..."></div></div>
+          <div class="mt-5">
+            <div class="flex items-center justify-between gap-3 mb-3"><span class="meta">Alternativas e gabarito</span><span class="tiny muted">Selecione a alternativa correta</span></div>
+            <div id="optionsEditor" class="space-y-2"></div>
+            <div class="flex flex-wrap gap-2 mt-3"><button class="btn secondary" id="addOption">＋ Adicionar alternativa E</button><button class="btn ghost" id="removeOption">− Remover última</button></div>
+          </div>
+        </section>
+
+        <section class="panel p-4 md:p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><div class="text-lg font-black">Comentário do professor / Justificativa</div><div class="text-xs muted mt-1">Inclua atualização, explicação por alternativa, Take Home Message e referências.</div></div><span class="pill">APÓS RESPONDER</span></div>
+          <div class="toolbar" data-toolbar="commentEditor"></div>
+          <div id="commentEditor" class="rich" contenteditable="true" data-placeholder="Comentário;&#10;...&#10;&#10;✨ Nota de atualização ✨;&#10;...&#10;&#10;Explicação;&#10;A ' INCORRETA ' ...&#10;B ' CORRETA ' ..."></div>
+          <div class="grid gap-3 mt-4">
+            <label class="block"><span class="meta block mb-2">Link do Vimeo</span><input id="videoUrl" class="field" placeholder="https://vimeo.com/123456789"><span class="tiny muted block mt-2">O player será exibido no comentário depois da resposta.</span></label>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-4"><button class="btn secondary" id="makeImportant">✦ Inserir caixa importante</button><button class="btn secondary" id="addExplanation">💡 Inserir seção Explicação</button><button class="btn secondary" id="addTakeHome">🎯 Inserir Take Home Message</button><button class="btn secondary" id="addReferences">📚 Inserir Referências</button></div>
+        </section>
+
+        <section class="panel p-4 md:p-5">
+          <div class="text-lg font-black mb-3">Salvar no Banco de Dados</div>
+          <div class="flex flex-wrap items-center gap-2"><button class="btn success" id="saveQuestions">☁ Salvar / enviar questão(ões)</button><button class="btn secondary" id="newQuestion">＋ Nova questão</button><button class="btn ghost" id="validateQuestion">✓ Validar preenchimento</button></div>
+          <div class="text-xs muted mt-3">Por padrão, as questões novas ficam somente no login do Banco de Dados. Elas não entram na Trilha nem no Desafio do BQHZ.</div>
+          <div id="editorStatus" class="status mt-4">Pronto para importar. O banco remoto ainda não foi consultado.</div>
+          <div id="questionUploadProgress" class="upload-progress hidden" role="status" aria-live="polite" aria-atomic="true">
+            <div class="flex items-center justify-between gap-3 mb-2"><span id="questionUploadLabel" class="text-sm font-bold">Preparando envio das questões…</span><strong id="questionUploadPercent" class="text-sm text-purple-200 tabular-nums">0%</strong></div>
+            <div class="progress-track"><div id="questionUploadBar" class="progress-fill"></div></div>
+            <div id="questionUploadDetail" class="tiny muted mt-2">Aguarde enquanto o conteúdo é enviado e salvo no banco.</div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="space-y-5 min-w-0">
+        <section class="panel p-4 md:p-5 sticky top-3">
+          <div class="flex items-center justify-between gap-2 mb-4"><div class="text-lg font-black">Pré-visualização</div><button class="btn secondary" id="refreshPreview">Atualizar</button></div>
+          <div class="rounded-2xl p-4 md:p-5" style="background:#10101a;border:1px solid #35354b">
+            <div class="flex items-center justify-between gap-3 mb-4"><span class="pill">QUESTÃO · HZ MED</span><span class="tiny muted" id="previewMeta">Revalida - INEP</span></div>
+            <div id="previewStem" class="preview-content text-sm mb-5">O enunciado aparecerá aqui.</div>
+            <div id="previewOptions" class="space-y-2"></div>
+            <div class="text-xs muted mt-4" id="previewAnswerLine">Gabarito oculto na tela do aluno até responder.</div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-3"><button class="btn secondary" id="togglePreviewAnswer">Mostrar como respondida</button><button class="btn ghost" id="hidePreviewAnswer">Ocultar gabarito</button></div>
+          <div id="previewCommentWrap" class="hidden mt-4 rounded-2xl p-4" style="background:#191927;border:1px solid #36364d"><div class="font-black mb-3">🎓 Comentário do professor</div><div id="previewComment" class="preview-content text-sm"></div><div id="previewVideo" class="hidden mt-4"></div></div>
+        </section>
+        <section class="panel p-4 md:p-5"><div class="font-black mb-2">Formato reconhecido automaticamente</div><div class="space-y-2 text-xs muted"><p><b class="text-purple-200">1)</b> início da questão</p><p><b class="text-purple-200">A) B) C) D) E)</b> alternativas</p><p><b class="text-purple-200">Gabarito: C</b> alternativa correta</p><p><b class="text-purple-200">Justificativa:</b> comentário do professor</p><p><b class="text-purple-200">Especialidade:</b> origem/banca (ex.: Revalida - INEP)</p><p><b class="text-purple-200">Tema:</b> hierarquia de especialidade e subtemas</p><p><b class="text-purple-200">Vimeo:</b> link do vídeo (ou campo próprio)</p></div></section>
+      </aside>
+    </div>
+  </section>
+
+  <section id="paneDatabase" class="hidden space-y-5">
+    <div class="panel p-4 md:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><div class="text-xl font-black">Banco de Dados · Gerenciamento</div><p class="text-sm muted mt-1">Edite questões já publicadas, altere gabarito/comentário/imagens ou exclua questão/prova inteira.</p></div><button class="btn primary" id="reloadDb">↻ Carregar banco remoto</button></div>
+      <div class="grid two gap-3" style="grid-template-columns:1.2fr .8fr"><input class="field" id="dbSearch" placeholder="Pesquisar prova, enunciado, especialidade ou tema..."><select class="field" id="dbSpecialtyFilter"><option value="">Todas as especialidades</option></select></div>
+      <div id="dbStatus" class="status mt-3">Banco remoto ainda não carregado.</div>
+    </div>
+    <div id="dbExamList" class="space-y-4"></div>
+  </section>
+
+  <section id="paneSummaries" class="hidden space-y-5">
+    <div class="panel p-4 md:p-5">
+      <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
+        <div><div class="text-xl font-black">Biblioteca de Resumos · Editor rico</div><p class="text-sm muted mt-1">Crie resumos como em um editor de texto: tópicos, caixas coloridas, imagens, tabelas, listas, links e formatação. O conteúdo será exibido na Biblioteca de Resumos do HZ MED.</p></div>
+        <span class="pill">HTML RICO · HZ MED</span>
+      </div>
+      <div class="grid two gap-3 mb-4" style="grid-template-columns:1.4fr .6fr">
+        <label class="block"><span class="meta block mb-2">Título do resumo</span><input id="summaryTitle" class="field" placeholder="Ex.: Tromboembolismo pulmonar"></label>
+        <label class="block"><span class="meta block mb-2">Ícone / emoji</span><input id="summaryEmoji" class="field" value="📘" maxlength="8" placeholder="📘"></label>
+        <label class="block"><span class="meta block mb-2">Cor do título</span><input id="summaryThemeColor" class="field" type="color" value="#a855f7" style="height:44px;padding:5px"></label>
+        <label class="block"><span class="meta block mb-2">Fundo do título</span><input id="summaryThemeBackground" class="field" type="color" value="#211631" style="height:44px;padding:5px"></label>
+      </div>
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2"><span class="meta">Conteúdo do resumo</span><span class="tiny muted">Imagens e tabelas são preservadas e apresentadas dentro da Biblioteca</span></div>
+      <div class="toolbar" data-toolbar="summaryEditor"></div>
+      <div id="summaryEditor" class="rich" contenteditable="true" style="min-height:440px;max-height:75vh;background:#fff;color:#1f2937;border-color:#57506d" data-placeholder="Comece a escrever seu resumo. Use títulos para separar tópicos, caixas para pontos importantes e tabelas para comparações..." aria-label="Editor rico da Biblioteca de Resumos"></div>
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button class="btn success" id="saveSummary">☁ Salvar resumo</button>
+        <button class="btn secondary" id="newSummary">＋ Novo resumo</button>
+        <button class="btn secondary" id="renameSummary">✎ Renomear</button>
+        <button class="btn danger" id="deleteSummary">Excluir resumo</button>
+        <button class="btn ghost" id="refreshSummaryPreview">Pré-visualizar</button>
+      </div>
+      <div id="summaryStatus" class="status mt-4">Abra a Biblioteca de Resumos para carregar os materiais existentes.</div>
+      <div id="summaryUploadProgress" class="upload-progress hidden" role="status" aria-live="polite" aria-atomic="true">
+        <div class="flex items-center justify-between gap-3 mb-2"><span id="summaryUploadLabel" class="text-sm font-bold">Preparando envio do resumo…</span><strong id="summaryUploadPercent" class="text-sm text-purple-200 tabular-nums">0%</strong></div>
+        <div class="progress-track"><div id="summaryUploadBar" class="progress-fill"></div></div>
+        <div id="summaryUploadDetail" class="tiny muted mt-2">Aguarde enquanto o resumo é enviado e salvo na Biblioteca.</div>
+      </div>
+    </div>
+    <div class="grid split gap-5" style="grid-template-columns:minmax(0,1fr) minmax(320px,.85fr)">
+      <section class="panel p-4 md:p-5 min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><div class="text-lg font-black">Pré-visualização</div><div class="tiny muted">Como o resumo será apresentado no HZ MED</div></div></div>
+        <div class="rounded-2xl p-4 md:p-5" style="background:#fff;color:#1f2937;min-height:180px">
+          <div id="summaryPreviewTitle" class="font-black text-xl rounded-xl px-4 py-3 mb-4" style="background:#211631;color:#fff">Título do resumo</div>
+          <div id="summaryPreviewContent" class="preview-content"></div>
+        </div>
+      </section>
+      <section class="panel p-4 md:p-5 min-w-0">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><div class="text-lg font-black">Banco de Dados dos Resumos</div><div class="tiny muted">Edite, renomeie ou exclua materiais já publicados.</div></div><button class="btn secondary" id="reloadSummaries">↻ Atualizar</button></div>
+        <input id="summarySearch" class="field mb-3" placeholder="Pesquisar resumo...">
+        <div id="summaryDbStatus" class="status mb-3">Resumos ainda não carregados.</div>
+        <div id="summaryList" class="space-y-2 max-h-[660px] overflow-y-auto pr-1"></div>
+      </section>
+    </div>
+  </section>
+</div>
+<input type="file" id="imageFile" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden">
+<input type="file" id="jsonFile" accept="application/json,.json" class="hidden">
+<script>
+'use strict';
+const API_URL='https://script.google.com/macros/s/AKfycbywMShtxXw8y7Ld3pHEFntwo7-kg4MQ6sYPBzMt9BMsbpIp0dD_y9C5MTUKdBP6pP7YtQ/exec';
+const BANK_TOKEN='a276e6f7346547f3a323c4a10267e483e6a18025ab904e33';
+const ALLOWED_TAGS=new Set(['P','BR','DIV','SPAN','H1','H2','H3','H4','H5','H6','UL','OL','LI','TABLE','CAPTION','COLGROUP','COL','THEAD','TBODY','TFOOT','TR','TD','TH','IMG','STRONG','EM','B','I','U','S','SUP','SUB','A','MARK','BLOCKQUOTE','HR','SMALL','CODE','PRE','FONT','CENTER']);
+const REMOVE_CONTENT=new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','TEXTAREA','SELECT','OPTION','META','LINK','SVG','VIDEO','AUDIO']);
+const state={drafts:[],index:0,exams:[],dbLoaded:false,editingExamId:'',editingQuestionId:'',editingExam:null,previewAnswered:false,activeTab:'editor',lastEditor:null,loading:false,summaries:[],summariesLoaded:false,editingSummaryId:''};
+const $=id=>document.getElementById(id);
+function status(message,type=''){const el=$('editorStatus');el.className='status mt-4'+(type?' '+type:'');el.textContent=message;}
+function dbStatus(message,type=''){const el=$('dbStatus');el.className='status mt-3'+(type?' '+type:'');el.textContent=message;}
+function esc(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+function keyText(value){return String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').replace(/[’'`´]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+function safeUrl(value,image=false){const x=String(value||'').trim();if(!x)return false;if(/^(https?:|\/|\.\.?\/|#)/i.test(x))return true;if(image&&/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(x))return true;if(!image&&/^(mailto:|tel:)/i.test(x))return true;return false;}
+function sanitizeForSite(input){
+  let html=String(input??'').trim();
+  if(!html)return '';
+  const hasHtml=/<\/?[a-z][^>]*>/i.test(html);
+  if(!hasHtml){html=esc(html).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\n/g,'<br>');}
+  const template=document.createElement('template');template.innerHTML=html;
+  function walk(parent){Array.from(parent.childNodes).forEach(node=>{
+    if(node.nodeType!==1)return;const tag=node.tagName;
+    if(REMOVE_CONTENT.has(tag)){node.remove();return;}
+    if(!ALLOWED_TAGS.has(tag)){const frag=document.createDocumentFragment();while(node.firstChild)frag.appendChild(node.firstChild);walk(frag);node.replaceWith(frag);return;}
+    Array.from(node.attributes).forEach(attr=>{
+      const name=attr.name.toLowerCase(),val=String(attr.value||'').trim();
+      if(name.startsWith('on')||['srcdoc','formaction','xmlns'].includes(name)||name.startsWith('xlink:')){node.removeAttribute(attr.name);return;}
+      const allowed=['class','title','style'].includes(name)||(tag==='FONT'&&['color','face','size'].includes(name))||(['TABLE','TD','TH','COL','COLGROUP'].includes(tag)&&['width','height','align','valign','border','cellpadding','cellspacing','span'].includes(name))||(tag==='IMG'&&['src','alt','width','height','loading'].includes(name))||(tag==='A'&&['href','target','rel'].includes(name))||(['TD','TH'].includes(tag)&&['colspan','rowspan','scope'].includes(name))||(tag==='MARK'&&name==='data-medreview-text-highlight');
+      if(!allowed){node.removeAttribute(attr.name);return;}
+      if(name==='src'&&!safeUrl(val,true))node.removeAttribute(attr.name);
+      if(name==='href'&&!safeUrl(val,false))node.removeAttribute(attr.name);
+      if(name==='target'&&!['_blank','_self'].includes(val))node.removeAttribute(attr.name);
+      if(name==='style'&&/(url\s*\(|expression\s*\(|javascript:|vbscript:|@import|behavior\s*:|-moz-binding)/i.test(val))node.removeAttribute(attr.name);
+    });
+    if(tag==='A'&&node.getAttribute('target')==='_blank')node.setAttribute('rel','noopener noreferrer');
+    walk(node);
+  });}
+  walk(template.content);return template.innerHTML;
+}
+function isPaperWhiteCssColor(value){
+  const raw=String(value||'').trim().toLowerCase().replace(/\s*!important\s*$/,'');
+  if(!raw)return false;
+  const named={white:[255,255,255],snow:[255,250,250],ivory:[255,255,240],floralwhite:[255,250,240],ghostwhite:[248,248,255],whitesmoke:[245,245,245]};
+  let rgb=named[raw]||null;
+  let m;
+  if(!rgb&&(m=raw.match(/^#([0-9a-f]{3})$/i)))rgb=m[1].split('').map(ch=>parseInt(ch+ch,16));
+  if(!rgb&&(m=raw.match(/^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i)))rgb=[parseInt(m[1].slice(0,2),16),parseInt(m[1].slice(2,4),16),parseInt(m[1].slice(4,6),16)];
+  if(!rgb&&(m=raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i)))rgb=[Number(m[1]),Number(m[2]),Number(m[3])];
+  return !!rgb&&rgb.every(channel=>channel>=242);
+}
+function isCopiedDefaultBlack(value){
+  const raw=String(value||'').trim().toLowerCase();
+  if(!raw)return false;
+  if(['black','#000','#000000','#111','#111111','#1a1a1a','#202020'].includes(raw))return true;
+  const m=raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if(!m)return false;
+  const rgb=[Number(m[1]),Number(m[2]),Number(m[3])];
+  return Math.max(...rgb)<=72&&Math.max(...rgb)-Math.min(...rgb)<=24;
+}
+function stripOfficeWhiteBackgrounds(root){
+  const visit=(node,inheritedWhite=false)=>{
+    if(!node||node.nodeType!==1)return;
+    const style=node.style;
+    const bgColor=style.backgroundColor||'';
+    const bg=style.background||'';
+    const ownWhite=isPaperWhiteCssColor(bgColor)||isPaperWhiteCssColor(bg);
+    const ownNonWhite=!!(bgColor||bg)&&!ownWhite;
+    if(ownWhite){style.removeProperty('background');style.removeProperty('background-color');}
+    const whiteContext=ownWhite||(inheritedWhite&&!ownNonWhite);
+    if(whiteContext){
+      if(isCopiedDefaultBlack(style.color))style.removeProperty('color');
+      if(isCopiedDefaultBlack(style.webkitTextFillColor))style.removeProperty('-webkit-text-fill-color');
+    }
+    if(!style.length)node.removeAttribute('style');
+    Array.from(node.children||[]).forEach(child=>visit(child,whiteContext));
+  };
+  if(root&&root.nodeType===1)visit(root,false);
+  else if(root&&root.childNodes)Array.from(root.childNodes).forEach(node=>{if(node.nodeType===1)visit(node,false);});
+  return root;
+}
+function stripOfficeWhiteBackgroundsHtml(value){
+  const holder=document.createElement('div');holder.innerHTML=String(value||'');
+  stripOfficeWhiteBackgrounds(holder);return holder.innerHTML;
+}
+function normalizeQuestionRich(value){return sanitizeForSite(value);}
+function normalizeImportedQuestionRich(value){return stripOfficeWhiteBackgroundsHtml(sanitizeForSite(value));}
+function normalizeRich(value){return sanitizeForSite(value);}
+function cleanTextFromHtml(value){const el=document.createElement('div');el.innerHTML=String(value||'');return (el.textContent||'').replace(/\u00a0/g,' ').trim();}
+function parseVimeo(value){const raw=String(value||'').trim();if(!raw)return '';try{const u=new URL(/^https?:\/\//i.test(raw)?raw:'https://'+raw);if(!(u.hostname==='vimeo.com'||u.hostname.endsWith('.vimeo.com')))return '';const m=u.pathname.match(/\/(?:video\/)?(\d+)(?:\/|$)/);if(!m)return '';const h=u.searchParams.get('h')||u.searchParams.get('hash')||'';return `https://player.vimeo.com/video/${m[1]}${h?'?h='+encodeURIComponent(h):''}`;}catch{return '';}}
+function makeBlankQuestion(number=1){return {id:'',number,stem:'',alternatives:[{id:'A',texto:''},{id:'B',texto:''},{id:'C',texto:''},{id:'D',texto:''}],answerKey:'',commentary:'',videoUrl:'',institution:'Revalida - INEP',year:'',theme:'',specialty:''};}
+function getCurrent(){return state.drafts[state.index]||null;}
+function splitQuestionBlocks(raw){
+  const text=String(raw||'').replace(/\r/g,'').replace(/\u00a0/g,' ');
+  const matches=[...text.matchAll(/^\s*(\d{1,4})\s*\)\s*/gm)];
+  if(!matches.length)return text.trim()?[{number:1,text:text.trim()}]:[];
+  return matches.map((m,i)=>({number:Number(m[1])||i+1,text:text.slice(m.index+m[0].length,i+1<matches.length?matches[i+1].index:text.length).trim()})).filter(x=>x.text);
+}
+function parseQuestionBlock(block,defaultNumber){
+  const lines=String(block.text||'').split('\n');
+  const boundaryRegex=/^\s*(?:Gabarito|Justificativa|Coment[aá]rio(?:\s+do\s+professor)?|Especialidade|Origem|Banca|Tema|Ano|V[ií]deo|Vimeo|Link\s+do\s+v[ií]deo)\s*[:;：]/i;
+  const answerIndex=lines.findIndex(x=>/^\s*Gabarito\s*[:;：]/i.test(x));
+  const justificationIndex=lines.findIndex(x=>/^\s*(Justificativa|Coment[aá]rio(?:\s+do\s+professor)?)\s*[:;：]?\s*$/i.test(x.trim()));
+  const contentLimit=[answerIndex,justificationIndex].filter(x=>x>=0).reduce((a,b)=>Math.min(a,b),lines.length);
+  // O marcador precisa ter pontuação logo após a letra: evita confundir
+  // "A teoria..." e "A paciente..." com alternativas.
+  const altRegex=/^\s*([A-E])\s*[\)\].:\-–—]\s*(.*)$/i;
+  const altIndexes=[];
+  lines.forEach((line,i)=>{if(i<contentLimit&&altRegex.test(line.trim()))altIndexes.push(i);});
+  const firstAlt=altIndexes.length?altIndexes[0]:contentLimit;
+  const stem=lines.slice(0,firstAlt).join('\n').trim();
+  const alternatives=[];
+  for(let i=0;i<altIndexes.length;i++){
+    const start=altIndexes[i],end=i+1<altIndexes.length?altIndexes[i+1]:contentLimit;
+    const match=lines[start].trim().match(altRegex);const content=[match?.[2]||''];
+    for(let j=start+1;j<end;j++){if(boundaryRegex.test(lines[j]))break;content.push(lines[j]);}
+    alternatives.push({id:match[1].toUpperCase(),texto:normalizeQuestionRich(content.join('\n').trim())});
+  }
+  const gabaritoLine=answerIndex>=0?lines[answerIndex]:'';
+  const answerKey=(gabaritoLine.match(/^\s*Gabarito\s*[:;：]\s*([A-E])/i)||[])[1]?.toUpperCase()||'';
+  const commentHeadingIndex=lines.findIndex(x=>/^\s*Coment[aá]rio\s*;?\s*$/i.test(x.trim()));
+  const commentStart=justificationIndex>=0?justificationIndex+1:(commentHeadingIndex>=0?commentHeadingIndex:(answerIndex>=0?answerIndex+1:lines.length));
+  let videoUrl='';let institution='',theme='',year='';const commentLines=[];
+  for(let i=commentStart;i<lines.length;i++){
+    const line=lines[i];
+    let m=line.match(/^\s*(?:Especialidade|Origem|Banca)\s*[:;：]\s*(.*)$/i);if(m){institution=m[1].trim();continue;}
+    m=line.match(/^\s*Tema\s*[:;：]\s*(.*)$/i);if(m){theme=m[1].trim().replace(/\s*[|]\s*/g,' | ');continue;}
+    m=line.match(/^\s*Ano\s*[:;：]\s*(.*)$/i);if(m){year=m[1].trim();continue;}
+    m=line.match(/^\s*(?:Vimeo|V[ií]deo|Link\s+do\s+v[ií]deo|V[ií]deo\s+da\s+quest[aã]o)\s*[:;：]\s*(https?:\/\/\S+).*$/i);
+    if(m){videoUrl=m[1].replace(/[),.;]+$/,'');continue;}
+    const standalone=line.match(/https?:\/\/(?:www\.)?(?:vimeo\.com|player\.vimeo\.com)\/[^\s)]+/i);
+    if(standalone&&/vimeo/i.test(line)){videoUrl=standalone[0].replace(/[),.;]+$/,'');const before=line.slice(0,line.indexOf(standalone[0])).trim();if(before)commentLines.push(before);continue;}
+    if(/^\s*Gabarito\s*[:;：]/i.test(line))continue;
+    commentLines.push(line);
+  }
+  if(!videoUrl){const v=lines.join('\n').match(/https?:\/\/(?:www\.)?(?:vimeo\.com|player\.vimeo\.com)\/[^\s)]+/i);if(v)videoUrl=v[0].replace(/[),.;]+$/,'');}
+  if(!videoUrl){const href=String(block.text||'').match(/href\s*=\s*['\"](https?:\/\/(?:www\.)?(?:vimeo\.com|player\.vimeo\.com)\/[^'\"\s]+)/i);if(href)videoUrl=href[1].replace(/[),.;]+$/,'');}
+  return { ...makeBlankQuestion(block.number||defaultNumber),number:block.number||defaultNumber,stem:normalizeImportedQuestionRich(stem),alternatives:alternatives.length?alternatives:[{id:'A',texto:''},{id:'B',texto:''},{id:'C',texto:''},{id:'D',texto:''}],answerKey,commentary:normalizeQuestionRich(commentLines.join('\n').trim()),videoUrl,institution:institution||'Revalida - INEP',year,theme,specialty:'' };
+}
+function richContentToLines(sourceHtml){
+  const source=document.createElement('div');source.innerHTML=String(sourceHtml||'');
+  const lines=[];let pending=[];
+  const appendPending=(node,inlineWrappers)=>{let current=node;for(let i=inlineWrappers.length-1;i>=0;i--){const wrapper=inlineWrappers[i].cloneNode(false);wrapper.appendChild(current);current=wrapper;}pending.push(current);};
+  const BLOCKS=new Set(['P','DIV','H1','H2','H3','H4','H5','H6','LI','BLOCKQUOTE','PRE']);
+  const wrapMarkup=(inner,blockWrappers,inlineWrappers)=>{
+    let html=inner;
+    for(let i=inlineWrappers.length-1;i>=0;i--){const w=inlineWrappers[i].cloneNode(false);w.innerHTML=html;html=w.outerHTML;}
+    for(let i=blockWrappers.length-1;i>=0;i--){const w=blockWrappers[i].cloneNode(false);w.innerHTML=html;html=w.outerHTML;}
+    return html||'';
+  };
+  const flush=(blockWrappers)=>{
+    if(!pending.length)return;
+    const holder=document.createElement('div');pending.forEach(n=>holder.appendChild(n));pending=[];
+    let html=wrapMarkup(holder.innerHTML,blockWrappers,[]);
+    if(!blockWrappers.length)html=`<p>${html}</p>`;
+    const text=(holder.textContent||'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
+    if(text||/<img\b|<table\b/i.test(html))lines.push({text,html});
+  };
+  const visit=(node,blockWrappers=[],inlineWrappers=[])=>{
+    if(node.nodeType===Node.TEXT_NODE){
+      const pieces=String(node.nodeValue||'').replace(/\r/g,'').split('\n');
+      pieces.forEach((part,i)=>{if(part)appendPending(document.createTextNode(part),inlineWrappers);if(i<pieces.length-1)flush(blockWrappers);});
+      return;
+    }
+    if(node.nodeType!==Node.ELEMENT_NODE)return;
+    const tag=node.tagName;
+    if(tag==='BR'){flush(blockWrappers);return;}
+    if(tag==='TABLE'){
+      flush(blockWrappers);
+      const html=wrapMarkup(node.outerHTML,blockWrappers,[]);
+      const text=(node.innerText||node.textContent||'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
+      lines.push({text,html});return;
+    }
+    if(tag==='HR'){
+      flush(blockWrappers);
+      lines.push({text:'',html:wrapMarkup(node.outerHTML,blockWrappers,[])});return;
+    }
+    if(BLOCKS.has(tag)){
+      flush(blockWrappers);
+      const wrapper=node.cloneNode(false);
+      Array.from(node.childNodes).forEach(child=>visit(child,[...blockWrappers,wrapper],inlineWrappers));
+      flush([...blockWrappers,wrapper]);
+      return;
+    }
+    if(tag==='IMG'){
+      appendPending(node.cloneNode(true),inlineWrappers);return;
+    }
+    const wrapper=node.cloneNode(false);
+    Array.from(node.childNodes).forEach(child=>visit(child,blockWrappers,[...inlineWrappers,wrapper]));
+  };
+  Array.from(source.childNodes).forEach(node=>visit(node));
+  flush([]);
+  return lines;
+}
+function stripLeadingMarkerFromHtml(html,regex){
+  const root=document.createElement('div');root.innerHTML=String(html||'');
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
+  while((node=walker.nextNode())){
+    const value=String(node.nodeValue||'');if(!value.trim())continue;
+    const match=value.match(regex);if(match){node.nodeValue=value.slice(match[0].length);break;}
+    break;
+  }
+  return root.innerHTML;
+}
+function stripQuestionNumberFromLine(line){
+  const match=String(line.text||'').match(/^\s*\d{1,4}\s*\)\s*/);
+  if(!match)return line;
+  return {...line,text:String(line.text).slice(match[0].length).trim(),html:stripLeadingMarkerFromHtml(line.html,/^\s*\d{1,4}\s*\)\s*/)};
+}
+function splitRichQuestionBlocks(sourceHtml){
+  const lines=richContentToLines(sourceHtml);
+  const starts=[];lines.forEach((line,index)=>{const m=String(line.text||'').match(/^\s*(\d{1,4})\s*\)/);if(m)starts.push({index,number:Number(m[1])||starts.length+1});});
+  if(!starts.length)return lines.length?[{number:1,lines}]:[];
+  return starts.map((start,i)=>({number:start.number,lines:lines.slice(start.index,i+1<starts.length?starts[i+1].index:lines.length)}))
+    .filter(block=>block.lines.some(line=>line.text||/<img\b|<table\b/i.test(line.html)))
+    .map(block=>({...block,lines:block.lines.map((line,i)=>i===0?stripQuestionNumberFromLine(line):line)}));
+}
+function parseQuestionRecords(block,defaultNumber){
+  const lines=Array.isArray(block.lines)?block.lines:[];
+  const boundaryRegex=/^\s*(?:Gabarito|Justificativa|Coment[aá]rio(?:\s+do\s+professor)?|Especialidade|Origem|Banca|Tema|Ano|V[ií]deo|Vimeo|Link\s+do\s+v[ií]deo)\s*[:;：]/i;
+  const answerIndex=lines.findIndex(x=>/^\s*Gabarito\s*[:;：]/i.test(x.text||''));
+  const justificationIndex=lines.findIndex(x=>/^\s*(?:Justificativa|Coment[aá]rio(?:\s+do\s+professor)?)\s*[:;：]?\s*$/i.test(String(x.text||'').trim()));
+  const commentHeadingIndex=lines.findIndex(x=>/^\s*Coment[aá]rio\s*;?\s*$/i.test(String(x.text||'').trim()));
+  const contentLimit=[answerIndex,justificationIndex,commentHeadingIndex].filter(x=>x>=0).reduce((a,b)=>Math.min(a,b),lines.length);
+  const altRegex=/^\s*([A-E])\s*[\)\].:\-–—]\s*(.*)$/i;
+  const altIndexes=[];lines.forEach((line,i)=>{if(i<contentLimit&&altRegex.test(line.text||''))altIndexes.push(i);});
+  const firstAlt=altIndexes.length?altIndexes[0]:contentLimit;
+  const joinHtml=items=>items.map(x=>x.html||esc(x.text||'')).join('');
+  const stem=joinHtml(lines.slice(0,firstAlt));
+  const alternatives=[];
+  for(let i=0;i<altIndexes.length;i++){
+    const start=altIndexes[i],end=i+1<altIndexes.length?altIndexes[i+1]:contentLimit;
+    const match=String(lines[start].text||'').match(altRegex);
+    const markerRegex=/^\s*[A-E]\s*[\)\].:\-–—]\s*/i;
+    const content=[{...lines[start],html:stripLeadingMarkerFromHtml(lines[start].html,markerRegex)}];
+    for(let j=start+1;j<end;j++){if(boundaryRegex.test(lines[j].text||''))break;content.push(lines[j]);}
+    alternatives.push({id:match[1].toUpperCase(),texto:normalizeImportedQuestionRich(joinHtml(content))});
+  }
+  const gabaritoLine=answerIndex>=0?String(lines[answerIndex].text||''):'';
+  const answerKey=(gabaritoLine.match(/^\s*Gabarito\s*[:;：]\s*([A-E])/i)||[])[1]?.toUpperCase()||'';
+  const commentStart=justificationIndex>=0?justificationIndex+1:(commentHeadingIndex>=0?commentHeadingIndex:(answerIndex>=0?answerIndex+1:lines.length));
+  let videoUrl='',institution='',theme='',year='';const commentLines=[];
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i],txt=String(line.text||'');let m;
+    m=txt.match(/^\s*(?:Especialidade|Origem|Banca)\s*[:;：]\s*(.*)$/i);if(m){institution=m[1].trim();continue;}
+    m=txt.match(/^\s*Tema\s*[:;：]\s*(.*)$/i);if(m){theme=m[1].trim().replace(/\s*[|]\s*/g,' | ');continue;}
+    m=txt.match(/^\s*Ano\s*[:;：]\s*(.*)$/i);if(m){year=m[1].trim();continue;}
+    m=txt.match(/^\s*(?:Vimeo|V[ií]deo|Link\s+do\s+v[ií]deo|V[ií]deo\s+da\s+quest[aã]o)\s*[:;：]\s*(https?:\/\/\S+).*$/i);
+    if(m){videoUrl=m[1].replace(/[),.;]+$/,'');continue;}
+    if(!videoUrl){const href=String(line.html||'').match(/href\s*=\s*['"](https?:\/\/(?:www\.)?(?:vimeo\.com|player\.vimeo\.com)\/[^'"\s]+)/i);if(href)videoUrl=href[1].replace(/[),.;]+$/,'');}
+    if(i<commentStart||i===answerIndex||/^\s*Gabarito\s*[:;：]/i.test(txt))continue;
+    if(boundaryRegex.test(txt)&&/^(Especialidade|Origem|Banca|Tema|Ano|Vimeo|Vídeo|Video|Link)/i.test(txt))continue;
+    commentLines.push(line);
+  }
+  if(!videoUrl){const all=lines.map(x=>x.text||'').join('\n');const v=all.match(/https?:\/\/(?:www\.)?(?:vimeo\.com|player\.vimeo\.com)\/[^\s)]+/i);if(v)videoUrl=v[0].replace(/[),.;]+$/,'');}
+  return {...makeBlankQuestion(block.number||defaultNumber),number:block.number||defaultNumber,stem:normalizeImportedQuestionRich(stem),alternatives:alternatives.length?alternatives:[{id:'A',texto:''},{id:'B',texto:''},{id:'C',texto:''},{id:'D',texto:''}],answerKey,commentary:normalizeImportedQuestionRich(joinHtml(commentLines)),videoUrl,institution:institution||'Revalida - INEP',year,theme,specialty:''};
+}
+function parsePastedText(){
+  const rich=$('richPasteInput');
+  if(rich&&cleanTextFromHtml(rich.innerHTML)){
+    const blocks=splitRichQuestionBlocks(rich.innerHTML);
+    if(!blocks.length){status('Não encontrei o início numerado das questões. Use o formato 1), 2), 3) no começo de cada questão.','warn');return;}
+    state.drafts=blocks.map((b,i)=>parseQuestionRecords(b,i+1));
+    $('parseSummary').textContent=`${state.drafts.length} questão(ões) reconhecida(s), preservando imagens, tabelas e formatação.`;
+  }else{
+    const blocks=splitQuestionBlocks($('pasteInput').value);
+    if(!blocks.length){status('Cole ao menos uma questão para analisar.','warn');return;}
+    state.drafts=blocks.map((b,i)=>parseQuestionBlock(b,i+1));
+    $('parseSummary').textContent=`${state.drafts.length} questão(ões) reconhecida(s). Revise os campos antes de enviar.`;
+  }
+  state.index=0;state.editingExamId='';state.editingQuestionId='';state.editingExam=null;renderForm();renderPreview();status(`${state.drafts.length} questão(ões) reconhecida(s). Imagens, tabelas e estilos incorporados foram preservados quando estavam disponíveis na área de transferência.`,'ok');
+}
+function updateQuestionCounter(){ $('questionCounter').textContent=state.drafts.length?`Questão ${state.index+1} de ${state.drafts.length}`:'Questão 0 de 0';$('prevQuestion').disabled=state.index<=0;$('nextQuestion').disabled=state.index>=state.drafts.length-1;}
+function saveSelectionRange(editor){
+  const selection=window.getSelection();
+  if(selection&&selection.rangeCount){const range=selection.getRangeAt(0);if(editor.contains(range.commonAncestorContainer))return range.cloneRange();}
+  const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);return range;
+}
+function insertHtmlAtRange(editor,range,html){
+  editor.focus();const safe=sanitizeForSite(html);const fragment=document.createRange().createContextualFragment(safe);
+  range.deleteContents();const last=fragment.lastChild;range.insertNode(fragment);
+  if(last){range.setStartAfter(last);range.collapse(true);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}
+  editor.dispatchEvent(new Event('input',{bubbles:true}));
+}
+function readBlobAsDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(reader.error||new Error('Não foi possível ler a imagem copiada.'));reader.readAsDataURL(blob);});}
+async function compressImageBlob(blob){
+  if(!String(blob.type||'').startsWith('image/'))throw new Error('O item copiado não é uma imagem compatível.');
+  if(blob.size<=4*1024*1024)return await readBlobAsDataUrl(blob);
+  if(/image\/gif/i.test(blob.type))throw new Error('A imagem GIF copiada ultrapassa 4 MB. Reduza o arquivo antes de colar para preservar a animação.');
+  let source=null,width=0,height=0,closeSource=()=>{};
+  try{
+    if(typeof createImageBitmap==='function'){
+      const bitmap=await createImageBitmap(blob);
+      source=bitmap;width=bitmap.width;height=bitmap.height;closeSource=()=>bitmap.close?.();
+    }
+  }catch{}
+  if(!source){
+    try{
+      const dataUrl=await readBlobAsDataUrl(blob);
+      const img=await new Promise((resolve,reject)=>{const el=new Image();el.onload=()=>resolve(el);el.onerror=()=>reject(new Error('Falha ao decodificar imagem.'));el.src=dataUrl;});
+      source=img;width=img.naturalWidth||img.width;height=img.naturalHeight||img.height;
+    }catch{throw new Error('A imagem copiada é muito grande ou não pôde ser convertida.');}
+  }
+  const scale=Math.min(1,1800/Math.max(width||1,height||1));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+  const ctx=canvas.getContext('2d');ctx.drawImage(source,0,0,canvas.width,canvas.height);closeSource();
+  let output=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.84));
+  if(!output)output=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.84));
+  if(!output||output.size>4*1024*1024)throw new Error('A imagem permanece maior que 4 MB após a compressão. Reduza a imagem e cole novamente.');
+  return await readBlobAsDataUrl(output);
+}
+function attachRichPasteHandler(editor){
+  if(!editor||editor.dataset.richPasteBound==='1')return;editor.dataset.richPasteBound='1';
+  editor.addEventListener('paste',async event=>{
+    const clipboard=event.clipboardData;if(!clipboard)return;
+    const html=clipboard.getData('text/html');
+    const imageFiles=Array.from(clipboard.items||[]).filter(item=>item.kind==='file'&&/^image\/(png|jpe?g|gif|webp)$/i.test(item.type)).map(item=>item.getAsFile()).filter(Boolean);
+    if(!html&&!imageFiles.length)return;
+    event.preventDefault();const range=saveSelectionRange(editor);
+    try{
+      let sourceHtml=html;
+      if(sourceHtml){
+        const holder=document.createElement('div');holder.innerHTML=sourceHtml;
+        const imgs=Array.from(holder.querySelectorAll('img'));
+        for(let i=0;i<imgs.length;i++){
+          const src=imgs[i].getAttribute('src')||'';
+          if(!safeUrl(src,true)&&imageFiles[i])imgs[i].setAttribute('src',await compressImageBlob(imageFiles[i]));
+          if(!safeUrl(imgs[i].getAttribute('src')||'',true))imgs[i].replaceWith(document.createTextNode(imgs[i].getAttribute('alt')||'[Imagem não incorporada]'));
+        }
+        if(imageFiles.length&&!imgs.length){for(const file of imageFiles){const data=await compressImageBlob(file);const img=document.createElement('img');img.src=data;img.alt='Imagem copiada';img.style.cssText='max-width:100%;height:auto;display:block;margin:10px auto';holder.appendChild(img);}}
+        sourceHtml=holder.innerHTML;
+      }else{
+        const plain=clipboard.getData('text/plain');sourceHtml=plain?`<p>${esc(plain).replace(/\r?\n/g,'<br>')}</p>`:'';
+        for(const file of imageFiles){const data=await compressImageBlob(file);sourceHtml+=`<p><img src="${data}" alt="Imagem copiada" style="max-width:100%;height:auto;display:block;margin:10px auto"></p>`;}
+      }
+      if(editor.id!=='summaryEditor')sourceHtml=stripOfficeWhiteBackgroundsHtml(sourceHtml);
+      insertHtmlAtRange(editor,range,sourceHtml);
+      state.lastEditor=editor;
+      if(editor.id==='stemEditor'||editor.id==='commentEditor'||editor.hasAttribute('data-option-index'))syncCurrentForm();
+      if(editor.id==='stemEditor'||editor.id==='commentEditor'||editor.hasAttribute('data-option-index'))renderPreview();
+    }catch(error){status(error.message||'Não foi possível preservar as imagens coladas.','err');}
+  });
+  editor.addEventListener('focus',()=>{state.lastEditor=editor;});
+}
+function fillEditor(id,html,placeholder){const el=$(id);el.innerHTML=normalizeQuestionRich(html||'');el.dataset.placeholder=placeholder;attachRichPasteHandler(el);}
+function renderOptions(){const q=getCurrent();const root=$('optionsEditor');root.innerHTML='';if(!q)return;q.alternatives=q.alternatives?.length?q.alternatives:[{id:'A',texto:''},{id:'B',texto:''},{id:'C',texto:''},{id:'D',texto:''}];q.alternatives.forEach((opt,i)=>{
+  const row=document.createElement('div');row.className='option';row.innerHTML=`<div class="option-letter"><input type="radio" name="answerKey" value="${esc(opt.id)}" ${q.answerKey===opt.id?'checked':''} aria-label="Alternativa correta ${esc(opt.id)}" class="accent-green-500"><span>${esc(opt.id)})</span></div><div class="min-w-0"><div class="rich" contenteditable="true" data-option-index="${i}" data-placeholder="Texto da alternativa ${esc(opt.id)}"></div><div class="tiny muted mt-1">Marque o círculo se esta for a alternativa correta.</div></div>`;
+  row.querySelector('.rich').innerHTML=normalizeQuestionRich(opt.texto||'');attachRichPasteHandler(row.querySelector('.rich'));row.querySelector('.rich').addEventListener('focus',e=>state.lastEditor=e.currentTarget);row.querySelector('.rich').addEventListener('input',e=>{const cur=getCurrent();if(cur)cur.alternatives[i].texto=normalizeQuestionRich(e.currentTarget.innerHTML);});row.querySelector('input').addEventListener('change',e=>{if(e.target.checked){q.answerKey=opt.id;renderPreview();}});root.appendChild(row);
+});$('addOption').disabled=q.alternatives.length>=5;$('removeOption').disabled=q.alternatives.length<=4;}
+function renderForm(){const q=getCurrent();updateQuestionCounter();if(!q){return;}$('questionNumber').value=q.number||state.index+1;$('sourceName').value=q.institution||'Revalida - INEP';$('year').value=q.year||'';$('themePath').value=q.theme||'';$('videoUrl').value=q.videoUrl||'';$('groupTitle').value=state.editingExam?.title||$('groupTitle').value||'Revalida - INEP';$('shareWithBqhz').checked=state.editingExam ? String(state.editingExam.moduleScope||'shared')!=='database' : false;fillEditor('stemEditor',q.stem,'Digite ou cole o enunciado...');fillEditor('commentEditor',q.commentary,'Comentário do professor...');renderOptions();renderPreview();}
+function syncCurrentForm(){const q=getCurrent();if(!q)return;q.number=Math.max(1,Number($('questionNumber').value)||1);q.institution=$('sourceName').value.trim();q.year=$('year').value.trim();q.theme=$('themePath').value.trim().replace(/\s*[|]\s*/g,' | ');q.videoUrl=$('videoUrl').value.trim();q.stem=normalizeQuestionRich($('stemEditor').innerHTML);q.commentary=normalizeQuestionRich($('commentEditor').innerHTML);document.querySelectorAll('[data-option-index]').forEach(el=>{const i=Number(el.dataset.optionIndex);if(q.alternatives[i])q.alternatives[i].texto=normalizeQuestionRich(el.innerHTML);});const selected=document.querySelector('input[name="answerKey"]:checked');if(selected)q.answerKey=selected.value;}
+function headingKey(text){return keyText(String(text||'').replace(/[✨⭐🎯💡📚🧠📖💬]/g,'').replace(/[;:：]+$/g,'').trim());}
+function formatCommentaryPreview(html){
+  const safe=sanitizeForSite(html);if(!safe)return '<p class="muted">Comentário do professor não cadastrado.</p>';
+  const template=document.createElement('template');template.innerHTML=safe;
+  const lines=[];
+  const blockTags=new Set(['P','DIV','H1','H2','H3','H4','H5','H6','LI','BLOCKQUOTE','PRE']);
+  function collect(parent){
+    let inline=[];
+    const flush=()=>{if(!inline.length)return;const holder=document.createElement('div');inline.forEach(n=>holder.appendChild(n.cloneNode(true)));const value=holder.innerHTML;if(value.trim())lines.push({html:value,text:holder.textContent||''});inline=[];};
+    Array.from(parent.childNodes||[]).forEach(node=>{
+      if(node.nodeType===1&&node.tagName==='BR'){flush();return;}
+      if(node.nodeType===1&&blockTags.has(node.tagName)){
+        flush();
+        const hasNestedBlocks=Array.from(node.children||[]).some(child=>blockTags.has(child.tagName));
+        const hasDirectBreak=Array.from(node.childNodes||[]).some(child=>child.nodeType===1&&child.tagName==='BR');
+        if(node.tagName==='DIV'&&(hasNestedBlocks||hasDirectBreak))collect(node);
+        else lines.push({html:node.outerHTML,text:node.textContent||''});
+        return;
+      }
+      inline.push(node);
+    });
+    flush();
+  }
+  collect(template.content);
+  const sections=[];let active=null,prefix=[];
+  const start=(key,title,cls)=>{if(active)sections.push(active);active={key,title,cls,body:[]};};
+  const flushAlternativeCards=(body)=>{
+    const grouped=[];let current=null,normal=[];
+    const flushNormal=()=>{if(normal.length){grouped.push(normal.join(''));normal=[];}};
+    const flushCurrent=()=>{if(!current)return;const correct=current.status==='CORRETA';const bg=correct?'rgba(24,122,75,.16)':'rgba(160,42,52,.13)';const border=correct?'#2f9b67':'#b84d57';const color=correct?'#86efac':'#fca5a5';grouped.push(`<div style="margin:10px 0;padding:12px 14px;border:1px solid ${border};border-radius:12px;background:${bg}"><div style="font-weight:900;color:${color};margin-bottom:6px">Alternativa ${current.letter} · ${current.status}</div><div>${current.html.join('')}</div></div>`);current=null;};
+    body.forEach(line=>{
+      const text=String(line.text||'').replace(/\s+/g,' ').trim();
+      const match=text.match(/^([A-E])\s*(?:[\)\].:\-–—’'`]+)\s*(CORRETA|INCORRETA)\s*(?:[\)\].:\-–—’'`]+)?\s*(.*)$/i);
+      if(match){flushNormal();flushCurrent();const imagePresent=/<img\b/i.test(line.html);current={letter:match[1].toUpperCase(),status:match[2].toUpperCase(),html:[imagePresent?line.html:(match[3]?esc(match[3]):'')]};}
+      else if(current)current.html.push(line.html);
+      else normal.push(line.html);
+    });
+    flushNormal();flushCurrent();return grouped.join('');
+  };
+  lines.forEach(line=>{
+    const text=cleanTextFromHtml(line.html),key=headingKey(line.text||text);
+    if(key==='nota de atualizacao'||key==='nota de atualizacao importante')start(key,'✨ NOTA DE ATUALIZAÇÃO · IMPORTANTE','important-card');
+    else if(key==='explicacao')start(key,'💡 Explicação','explanation-card');
+    else if(key==='take home message')start(key,'🎯 Take Home Message','takehome-card');
+    else if(key==='referencias')start(key,'📚 Referências','reference-card');
+    else if(key==='comentario'||key==='comentario do professor')start(key,'💬 Comentário','comment-card');
+    else if(key==='na mente do examinador')start(key,'🧠 Na mente do examinador','explanation-card');
+    else if(key==='a teoria por tras da questao'||key==='teoria por tras da questao')start(key,'📖 A teoria por trás da questão','reference-card');
+    else if(active)active.body.push(line);
+    else prefix.push(line.html);
+  });
+  if(active)sections.push(active);
+  return prefix.join('')+sections.map(section=>{
+    const body=section.key==='explicacao'?flushAlternativeCards(section.body):section.body.map(x=>x.html).join('');
+    return `<section class="${section.cls}" style="${section.cls?'':'margin:12px 0'}"><div class="section-title">${section.title}</div>${body}</section>`;
+  }).join('');
+}
+function renderPreview(){syncCurrentForm();const q=getCurrent();if(!q)return;$('previewMeta').textContent=`${$('groupTitle').value||'Prova'} · ${q.institution||'Origem não informada'}`;$('previewStem').innerHTML=sanitizeForSite(q.stem)||'<span class="muted">O enunciado aparecerá aqui.</span>';
+  const root=$('previewOptions');root.innerHTML='';q.alternatives.forEach(opt=>{const item=document.createElement('div');const correct=state.previewAnswered&&q.answerKey===opt.id;const wrong=state.previewAnswered&&q.answerKey!==opt.id;item.className='preview-option'+(correct?' correct':wrong?'':'');item.innerHTML=`<b class="shrink-0">${esc(opt.id)}</b><div class="preview-content min-w-0 text-sm">${sanitizeForSite(opt.texto)||'<span class="muted">Alternativa vazia</span>'}</div>${correct?'<b class="text-green-300 text-xs shrink-0">CORRETA ✓</b>':''}`;root.appendChild(item);});
+  $('previewAnswerLine').textContent=state.previewAnswered?`Gabarito: ${q.answerKey||'não definido'}`:'Gabarito oculto na tela do aluno até responder.';
+  $('previewCommentWrap').classList.toggle('hidden',!state.previewAnswered);if(state.previewAnswered){$('previewComment').innerHTML=formatCommentaryPreview(q.commentary);const embed=parseVimeo(q.videoUrl);$('previewVideo').classList.toggle('hidden',!embed);$('previewVideo').innerHTML=embed?`<div class="font-black mb-2">🎥 Vídeo da questão</div><div class="aspect-video bg-black rounded-xl overflow-hidden"><iframe class="w-full h-full" src="${esc(embed)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="Vídeo Vimeo"></iframe></div><a class="text-xs text-purple-300 block mt-2" href="${esc(q.videoUrl)}" target="_blank" rel="noopener">Abrir no Vimeo ↗</a>`:'';}}
+function addTextToComment(html){const el=$('commentEditor');el.focus();const sel=window.getSelection();if(sel&&sel.rangeCount){const range=sel.getRangeAt(0);range.deleteContents();const temp=document.createElement('div');temp.innerHTML=html;const frag=document.createDocumentFragment();while(temp.firstChild)frag.appendChild(temp.firstChild);range.insertNode(frag);}else el.insertAdjacentHTML('beforeend',html);syncCurrentForm();renderPreview();}
+function makeToolbar(){document.querySelectorAll('[data-toolbar]').forEach(toolbar=>{
+  const target=toolbar.dataset.toolbar;toolbar.innerHTML=`<button class="tool" type="button" data-cmd="bold" title="Negrito"><b>B</b></button><button class="tool" type="button" data-cmd="italic" title="Itálico"><i>I</i></button><button class="tool" type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button><button class="tool" type="button" data-format="marker" title="Marca-texto">🖍</button><button class="tool" type="button" data-format="box" title="Caixa de destaque">▣</button><button class="tool" type="button" data-cmd="insertUnorderedList" title="Lista">• Lista</button><button class="tool" type="button" data-cmd="insertOrderedList" title="Lista numerada">1. Lista</button><button class="tool" type="button" data-cmd="justifyLeft" title="Alinhar à esquerda">⇤</button><button class="tool" type="button" data-cmd="justifyCenter" title="Centralizar">≡</button><button class="tool" type="button" data-cmd="justifyRight" title="Alinhar à direita">⇥</button><button class="tool" type="button" data-format="link" title="Inserir link">🔗</button><button class="tool" type="button" data-format="image" title="Inserir imagem">🖼</button><button class="tool" type="button" data-format="table" title="Inserir tabela">▦</button><button class="tool" type="button" data-format="quote" title="Citação">❝</button><button class="tool" type="button" data-format="heading2" title="Título de tópico H2">H2</button><button class="tool" type="button" data-format="heading3" title="Subtítulo H3">H3</button><button class="tool" type="button" data-format="paragraph" title="Parágrafo normal">P</button><button class="tool" type="button" data-format="topic-purple" title="Caixa de tópico roxa">▣ Roxa</button><button class="tool" type="button" data-format="topic-green" title="Caixa de tópico verde">▣ Verde</button><button class="tool" type="button" data-format="topic-blue" title="Caixa de tópico azul">▣ Azul</button><select class="tool-select" data-format="font"><option value="Arial">Arial</option><option value="Inter">Inter</option><option value="Georgia">Georgia</option><option value="Verdana">Verdana</option></select><select class="tool-select" data-format="size"><option value="14px">14 px</option><option value="16px" selected>16 px</option><option value="18px">18 px</option><option value="20px">20 px</option><option value="24px">24 px</option><option value="28px">28 px</option></select><input type="color" class="tool" value="#f3e8ff" data-format="color" title="Cor do texto"><input type="color" class="tool" value="#fde047" data-format="bg" title="Cor de fundo / marcação"><button class="tool" type="button" data-format="imgleft" title="Imagem à esquerda">Imagem ←</button><button class="tool" type="button" data-format="imgcenter" title="Imagem centralizada">Imagem ↔</button><button class="tool" type="button" data-format="imgright" title="Imagem à direita">Imagem →</button>`;
+  const rememberEditorSelection=()=>{const editor=$(target);if(!editor)return;const sel=window.getSelection();if(sel&&sel.rangeCount){const r=sel.getRangeAt(0);if(editor.contains(r.commonAncestorContainer)&&!r.collapsed)state.savedRange={editorId:target,range:r.cloneRange()};}};
+  toolbar.addEventListener('pointerdown',rememberEditorSelection);
+  toolbar.addEventListener('mousedown',rememberEditorSelection);
+  toolbar.addEventListener('click',e=>{const b=e.target.closest('button[data-cmd],button[data-format]');if(!b)return;const editor=$(target);state.lastEditor=editor;applyTool(b.dataset.cmd,b.dataset.format,editor);});
+  toolbar.addEventListener('change',e=>{const format=e.target.dataset.format;if(!format)return;const editor=$(target);state.lastEditor=editor;applyTool('',format,editor,e.target.value);});
+});
+}
+function wrapSelection(editor,style,tag='span'){editor.focus();const sel=window.getSelection();let range=sel&&sel.rangeCount?sel.getRangeAt(0):null;if((!range||range.collapsed||!editor.contains(range.commonAncestorContainer))&&state.savedRange&&state.savedRange.editorId===editor.id&&state.savedRange.range){range=state.savedRange.range.cloneRange();if(sel){sel.removeAllRanges();sel.addRange(range);}}if(!range||!editor.contains(range.commonAncestorContainer)||range.collapsed)return;const node=document.createElement(tag);Object.assign(node.style,style);try{range.surroundContents(node);}catch{node.appendChild(range.extractContents());range.insertNode(node);}if(sel){sel.removeAllRanges();const r=document.createRange();r.selectNodeContents(node);sel.addRange(r);state.savedRange={editorId:editor.id,range:r.cloneRange()};}}
+function applyTool(cmd,format,editor,value){if(!editor)return;editor.focus();state.lastEditor=editor;const refreshEditor=()=>{if(editor.id==='summaryEditor')renderSummaryPreview();else{syncCurrentForm();renderPreview();}};
+  if(cmd){document.execCommand(cmd,false,null);refreshEditor();return;}
+  if(format==='marker'){const sel=window.getSelection();if(sel&&sel.toString())wrapSelection(editor,{backgroundColor:$('commentEditor')===editor?'#fde047':'#fde047',color:'#18120a'},'mark');else document.execCommand('insertHTML',false,'<mark style="background-color:#fde047;color:#18120a">texto destacado</mark>');}
+  else if(format==='box')document.execCommand('insertHTML',false,'<div style="margin:12px 0;padding:14px;border:1px solid #b7791f;border-radius:12px;background:#fff7df;color:#5b3b0a"><strong>IMPORTANTE</strong><br>Digite aqui a informação de destaque.</div>');
+  else if(format==='link'){const url=prompt('Cole o endereço do link:');if(url&&safeUrl(url,false)){const text=window.getSelection()?.toString()||url;document.execCommand('insertHTML',false,`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`);}}
+  else if(format==='image'){$('imageFile').dataset.target=editor.id;$('imageFile').click();}
+  else if(format==='table')document.execCommand('insertHTML',false,'<table><tbody><tr><th>Coluna 1</th><th>Coluna 2</th></tr><tr><td>Conteúdo</td><td>Conteúdo</td></tr></tbody></table>');
+  else if(format==='quote')document.execCommand('insertHTML',false,'<blockquote>Digite a citação ou observação clínica.</blockquote>');
+  else if(format==='heading2')document.execCommand('formatBlock',false,'<h2>');
+  else if(format==='heading3')document.execCommand('formatBlock',false,'<h3>');
+  else if(format==='paragraph')document.execCommand('formatBlock',false,'<p>');
+  else if(format==='topic-purple')document.execCommand('insertHTML',false,'<div style="margin:14px 0;padding:16px;border:1px solid #c4a5ed;border-left:6px solid #8b5cf6;border-radius:14px;background:#f4ecff;color:#382454"><h3 style="font-weight:900;margin:0 0 8px">🟣 Título do tópico</h3><p>Desenvolva o conteúdo deste tópico.</p></div>');
+  else if(format==='topic-green')document.execCommand('insertHTML',false,'<div style="margin:14px 0;padding:16px;border:1px solid #a7d8b7;border-left:6px solid #16a34a;border-radius:14px;background:#eaf8ef;color:#173d28"><h3 style="font-weight:900;margin:0 0 8px">🟢 Título do tópico</h3><p>Desenvolva o conteúdo deste tópico.</p></div>');
+  else if(format==='topic-blue')document.execCommand('insertHTML',false,'<div style="margin:14px 0;padding:16px;border:1px solid #a9c9ef;border-left:6px solid #2563eb;border-radius:14px;background:#edf5ff;color:#17365f"><h3 style="font-weight:900;margin:0 0 8px">🔵 Título do tópico</h3><p>Desenvolva o conteúdo deste tópico.</p></div>');
+  else if(format==='font')wrapSelection(editor,{fontFamily:value||'Arial'});
+  else if(format==='size')wrapSelection(editor,{fontSize:value||'16px'});
+  else if(format==='color')wrapSelection(editor,{color:value||'#f3e8ff'});
+  else if(format==='bg')wrapSelection(editor,{backgroundColor:value||'#fde047',color:'#18120a'});
+  else if(['imgleft','imgcenter','imgright'].includes(format)){const img=editor.querySelector('img[data-selected-image="1"]');if(img){img.style.display='block';img.style.marginLeft=format==='imgleft'?'0':'auto';img.style.marginRight=format==='imgright'?'0':'auto';img.style.float='none';}}
+  refreshEditor();
+}
+document.addEventListener('click',e=>{const img=e.target.closest('.rich img');if(!img)return;document.querySelectorAll('.rich img[data-selected-image="1"]').forEach(x=>x.removeAttribute('data-selected-image'));img.dataset.selectedImage='1';});
+document.querySelectorAll('.rich').forEach(el=>attachRichPasteHandler(el));
+$('imageFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const editor=$(e.target.dataset.target)||state.lastEditor||$('commentEditor');const data=await compressImageBlob(file);const range=saveSelectionRange(editor);insertHtmlAtRange(editor,range,`<img src="${data}" alt="Imagem incorporada" style="max-width:100%;height:auto;display:block;margin:10px auto;border-radius:10px">`);if(editor.id==='summaryEditor')renderSummaryPreview();else{syncCurrentForm();renderPreview();}}catch(error){alert(error.message||'Não foi possível inserir a imagem.');}e.target.value='';});
+function validateQuestion(q){const errors=[];if(!cleanTextFromHtml(q.stem))errors.push('enunciado');const options=q.alternatives.filter(x=>cleanTextFromHtml(x.texto));if(options.length<4)errors.push('quatro alternativas A–D');if(!q.answerKey||!q.alternatives.some(x=>x.id===q.answerKey))errors.push('gabarito válido');if(!q.theme)errors.push('tema');return errors;}
+function slug(value){return keyText(value).replace(/ /g,'-').slice(0,70)||'revalida-inep';}
+function uid(){return 'hzq_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);}
+function normalizeQuestionForBackend(q,exam,number){const options=q.alternatives.filter(x=>x.id&&cleanTextFromHtml(x.texto)).map(x=>({id:x.id,texto:normalizeQuestionRich(x.texto),correta:x.id===q.answerKey}));const themeStr=String(q.theme||'').trim();const firstSeg=themeStr.split('|').map(x=>x.trim()).filter(Boolean)[0]||'';const derivedSpecialty=String(q.specialty||firstSeg||exam.specialty||'').trim();return {id:q.id||`${exam.id}:${uid()}`,number:Number(number||q.number)||1,stem:normalizeQuestionRich(q.stem),plainText:cleanTextFromHtml(q.stem),alternatives:options,answerKey:String(q.answerKey||'').toUpperCase(),theme:themeStr,specialty:derivedSpecialty,institution:String(q.institution||exam.institution||''),year:String(q.year||exam.year||''),commentary:normalizeQuestionRich(q.commentary),videoUrl:String(q.videoUrl||''),richStyleVersion:2,moduleScope:String(exam.moduleScope||'database')};}
+async function apiCall(action,params={},timeout=120000){const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),timeout);try{const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({...params,action,token:BANK_TOKEN}),redirect:'follow',signal:ctrl.signal});const raw=await res.text();let data;try{data=JSON.parse(raw);}catch{throw new Error('O Apps Script não retornou JSON. Verifique a implantação e as permissões do Web App.');}if(!res.ok||data?.ok===false)throw new Error(data?.error||`Falha HTTP ${res.status}.`);return data;}catch(e){if(e.name==='AbortError')throw new Error('A operação demorou mais do que o limite permitido.');throw e;}finally{clearTimeout(timer);}}
+// O Code.gs integrado utiliza BANK_TOKEN para as rotas do Banco, Editor e Resumos.
+// Utiliza fetch com Content-Type text/plain;charset=utf-8 (CORS-safelisted simple request),
+// evitando preflight OPTIONS bloqueado pelo Google Apps Script quando hospedado na Vercel
+// e impedindo envios POST duplicados concorrentes.
+async function apiCallWithProgress(action,params={},onProgress=()=>{},timeout=180000){
+  const body=JSON.stringify({...params,action,token:BANK_TOKEN});
+  const totalBytes=new Blob([body]).size;
+  const totalMb=(totalBytes/1024/1024).toFixed(2);
+  const report=value=>{try{onProgress(value);}catch(error){console.warn('Falha ao atualizar a barra de envio:',error);}};
+  report({phase:'upload',percent:4,label:'Conectando ao banco…',detail:'Preparando a transferência do conteúdo.'});
+  let currentPercent=8;
+  const progressTimer=window.setInterval(()=>{
+    if(currentPercent<86){
+      currentPercent=Math.min(86,currentPercent+Math.max(2,Math.round((88-currentPercent)*0.18)));
+      const sentMb=((totalBytes*(currentPercent/100))/1024/1024).toFixed(2);
+      report({phase:'upload',percent:currentPercent,label:'Enviando conteúdo…',detail:`${sentMb} MB de ${totalMb} MB enviados ao Apps Script.`});
+    }else{
+      report({phase:'processing',percent:92,label:'Conteúdo enviado. Salvando no Google Sheets…',detail:'O Apps Script está gravando e organizando os dados.'});
+    }
+  },320);
+  try{
+    const data=await apiCall(action,params,timeout);
+    window.clearInterval(progressTimer);
+    report({phase:'complete',percent:100,label:'Salvo com sucesso',detail:'O servidor confirmou a gravação.'});
+    return data;
+  }catch(error){
+    window.clearInterval(progressTimer);
+    throw error;
+  }
+}
+const uploadProgressHideTimers={question:null,summary:null};
+function setUploadProgress(kind,{percent=null,label='',detail='',state:mode='active'}={}){
+  const prefix=kind==='summary'?'summary':'question';
+  if(uploadProgressHideTimers[prefix]){clearTimeout(uploadProgressHideTimers[prefix]);uploadProgressHideTimers[prefix]=null;}
+  const box=$(prefix+'UploadProgress');if(!box)return;
+  box.classList.remove('hidden','indeterminate','error','success');
+  if(mode==='indeterminate'||percent===null)box.classList.add('indeterminate');
+  if(mode==='error')box.classList.add('error');
+  if(mode==='success')box.classList.add('success');
+  const fill=$(prefix+'UploadBar');if(fill&&percent!==null)fill.style.width=Math.max(0,Math.min(100,Number(percent)||0))+'%';
+  const percentEl=$(prefix+'UploadPercent');if(percentEl)percentEl.textContent=percent===null?'…':Math.round(Math.max(0,Math.min(100,Number(percent)||0)))+'%';
+  const labelEl=$(prefix+'UploadLabel');if(labelEl)labelEl.textContent=label||(kind==='summary'?'Enviando resumo…':'Enviando questões…');
+  const detailEl=$(prefix+'UploadDetail');if(detailEl)detailEl.textContent=detail||'';
+}
+function hideUploadProgress(kind,delay=900){const prefix=kind==='summary'?'summary':'question';if(uploadProgressHideTimers[prefix])clearTimeout(uploadProgressHideTimers[prefix]);uploadProgressHideTimers[prefix]=window.setTimeout(()=>{const box=$(prefix+'UploadProgress');if(box)box.classList.add('hidden');uploadProgressHideTimers[prefix]=null;},delay);}
+function formatUploadBytes(bytes){const n=Number(bytes)||0;if(n<1024)return n+' B';if(n<1024*1024)return (n/1024).toFixed(1)+' KB';return (n/1024/1024).toFixed(2)+' MB';}
+
+function summaryRawValue(item){if(typeof item==='string')return item;let raw=item?.raw??item?.text??item?.content??item?.conteudo??'';if(raw&&typeof raw==='object')raw=raw.raw??raw.text??raw.content??'';if(typeof raw==='string'&&raw.trim().startsWith('{')){try{const decoded=JSON.parse(raw);raw=decoded?.raw??decoded?.text??raw;}catch{}}return String(raw||'');}
+function summaryStableId(item){const explicit=item?.id??item?.ID??item?.key??'';if(explicit)return String(explicit);const raw=summaryRawValue(item);const line=raw.split(/\r?\n/).find(x=>/^\s*Tema\s*:/i.test(x));const title=String(item?.title??item?.titulo??line?.replace(/^\s*Tema\s*:\s*/i,'')??'Resumo Sem Título').trim();const slug=title.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_');return 'resumo_'+slug;}
+function markdownInlineToHtml(line){let out=esc(line);out=out.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g,(_,alt,url)=>`<img src="${esc(url)}" alt="${alt}" style="max-width:100%;height:auto;display:block;margin:12px auto">`);out=out.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,(_,label,url)=>`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`);out=out.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code>$1</code>');return out;}
+function legacySummaryToHtml(item){const raw=summaryRawValue(item);if(/<\/?[a-z][^>]*>/i.test(raw))return sanitizeForSite(raw);const known=/^(vis[aã]o geral|introdu[cç][aã]o|etiologia|fisiopatologia|quadro cl[ií]nico|diagn[oó]stico(?: diferencial)?|classifica[cç][aã]o|crit[eé]rios|conduta|tratamento|conduta \/ tratamento|laborat[oó]rio e imagem|exames complementares|dica de prova|dicas de prova|o pulo do gato|pulo do gato|conex[aã]o com o conte[uú]do|quest[aã]o autoral|coment[aá]rio|coment[aá]rio do professor|gabarito|refer[eê]ncias|take home message)\s*:?$/i;const out=[];let inList=false;for(const source of raw.replace(/\r/g,'').split('\n')){const line=source.trim();if(!line||/^Tema\s*:/i.test(line)||/^CorTema\s*:/i.test(line)||/^FundoTema\s*:/i.test(line)||/^EstiloSecao\s*:/i.test(line))continue;if(/^#{1,3}\s+/.test(line)||known.test(line)){if(inList){out.push('</ul>');inList=false;}out.push(`<h2>${markdownInlineToHtml(line.replace(/^#{1,3}\s+/, '').replace(/:$/,''))}</h2>`);continue;}if(/^[-•*]\s+/.test(line)){if(!inList){out.push('<ul>');inList=true;}out.push(`<li>${markdownInlineToHtml(line.replace(/^[-•*]\s+/,''))}</li>`);continue;}if(inList){out.push('</ul>');inList=false;}out.push(`<p>${markdownInlineToHtml(line)}</p>`);}if(inList)out.push('</ul>');return sanitizeForSite(out.join(''));}
+function normalizeSummaryItem(item){const id=summaryStableId(item);const title=String(item?.title??item?.titulo??'').trim()||summaryRawValue(item).split(/\r?\n/).find(x=>/^\s*Tema\s*:/i.test(x))?.replace(/^\s*Tema\s*:\s*/i,'').trim()||'Resumo Sem Título';const rich=String(item?.html??item?.richHtml??item?.contentHtml??item?.bodyHtml??'').trim();const raw=summaryRawValue(item);const color=String(item?.themeColor ?? item?.corTema ?? ((raw.match(/^\s*CorTema\s*:\s*(#[0-9a-f]{6})/im)||[])[1] || '#a855f7'));const background=String(item?.themeBackground ?? item?.fundoTema ?? ((raw.match(/^\s*FundoTema\s*:\s*(#[0-9a-f]{6})/im)||[])[1] || '#211631'));return {id,title,emoji:String(item?.emoji||'📘'),themeColor:/^#[0-9a-f]{6}$/i.test(color)?color:'#a855f7',themeBackground:/^#[0-9a-f]{6}$/i.test(background)?background:'#211631',html:rich?sanitizeForSite(rich):legacySummaryToHtml(item),updatedAt:String(item?.updatedAt||item?.updated_at||'')};}
+function summaryStatus(message,type=''){const el=$('summaryStatus');el.className='status mt-4'+(type?' '+type:'');el.textContent=message;}
+function renderSummaryPreview(){const title=$('summaryTitle').value.trim()||'Título do resumo';const color=$('summaryThemeColor').value||'#a855f7';const bg=$('summaryThemeBackground').value||'#211631';$('summaryPreviewTitle').textContent=`${$('summaryEmoji').value||'📘'} ${title}`;$('summaryPreviewTitle').style.background=`linear-gradient(100deg,${bg},${color}66)`;$('summaryPreviewTitle').style.color=(parseInt(bg.slice(1,3),16)*.299+parseInt(bg.slice(3,5),16)*.587+parseInt(bg.slice(5,7),16)*.114)>150?'#111827':'#ffffff';$('summaryPreviewContent').innerHTML=sanitizeForSite($('summaryEditor').innerHTML)||'<p class="muted">O conteúdo aparecerá aqui.</p>';}
+function renderSummaryDatabase(){const root=$('summaryList');if(!root)return;const query=keyText($('summarySearch').value);const rows=state.summaries.filter(x=>!query||keyText(x.title).includes(query));root.innerHTML='';if(!rows.length){root.innerHTML='<div class="status">Nenhum resumo encontrado.</div>';return;}rows.forEach(item=>{const card=document.createElement('div');card.className='exam-card';card.innerHTML=`<div class="flex items-start gap-3"><div class="text-2xl">${esc(item.emoji||'📘')}</div><div class="min-w-0 flex-1"><div class="font-black break-words">${esc(item.title)}</div><div class="tiny muted mt-1">${item.updatedAt?'Atualizado em '+esc(new Date(item.updatedAt).toLocaleString('pt-BR')):'Resumo da Biblioteca'}</div></div></div><div class="flex flex-wrap gap-2 mt-3"><button type="button" class="btn secondary" data-summary-edit="${esc(item.id)}">Editar</button><button type="button" class="btn secondary" data-summary-rename="${esc(item.id)}">Renomear</button><button type="button" class="btn danger" data-summary-delete="${esc(item.id)}">Excluir</button></div>`;root.appendChild(card);});}
+async function loadRemoteSummaries(){const statusEl=$('summaryDbStatus');statusEl.className='status mb-3';statusEl.textContent='Carregando resumos da Biblioteca…';$('reloadSummaries').disabled=true;try{const result=await apiCall('editorListSummaries',{},60000);const list=Array.isArray(result?.resumos)?result.resumos:Array.isArray(result?.items)?result.items:null;if(!list)throw new Error('O Apps Script não retornou uma lista de resumos válida. Confira se o Code.gs integrado foi publicado.');state.summaries=list.map(normalizeSummaryItem);state.summariesLoaded=true;renderSummaryDatabase();statusEl.className='status ok mb-3';statusEl.textContent=`${state.summaries.length} resumo(s) carregado(s).`; }catch(e){statusEl.className='status err mb-3';statusEl.textContent=e.message;}finally{$('reloadSummaries').disabled=false;}}
+function clearSummaryEditor(){state.editingSummaryId='';$('summaryTitle').value='';$('summaryEmoji').value='📘';$('summaryThemeColor').value='#a855f7';$('summaryThemeBackground').value='#211631';$('summaryEditor').innerHTML='';renderSummaryPreview();summaryStatus('Novo resumo. Escreva e salve para publicar.');}
+function editSummary(summaryId){const item=state.summaries.find(x=>String(x.id)===String(summaryId));if(!item)return;state.editingSummaryId=item.id;$('summaryTitle').value=item.title;$('summaryEmoji').value=item.emoji||'📘';$('summaryThemeColor').value=item.themeColor||'#a855f7';$('summaryThemeBackground').value=item.themeBackground||'#211631';$('summaryEditor').innerHTML=sanitizeForSite(item.html||'');renderSummaryPreview();summaryStatus(`Editando “${item.title}”. Salve para publicar as alterações.`,'warn');$('summaryTitle').focus();}
+async function persistSummary(overrides={}){
+  const title=String(overrides.title??$('summaryTitle').value).trim();
+  const html=sanitizeForSite($('summaryEditor').innerHTML);
+  if(!title)throw new Error('Informe o título do resumo.');
+  if(!cleanTextFromHtml(html)&&!/<img\b|<table\b/i.test(html))throw new Error('Escreva o conteúdo do resumo antes de salvar.');
+  const summary={id:state.editingSummaryId||('hzresumo_'+slug(title)+'_'+Date.now().toString(36)),title,emoji:String($('summaryEmoji').value||'📘').slice(0,8),themeColor:$('summaryThemeColor').value||'#a855f7',themeBackground:$('summaryThemeBackground').value||'#211631',html,formatVersion:2};
+  $('saveSummary').disabled=true;
+  setUploadProgress('summary',{percent:2,label:'Preparando o resumo…',detail:`Organizando texto, imagens e tabelas de “${title}”.`});
+  summaryStatus('Enviando resumo para a Biblioteca…');
+  try{
+    const result=await apiCallWithProgress('editorSaveSummary',{summary},progress=>{
+      setUploadProgress('summary',{percent:progress.percent,label:progress.label,detail:progress.detail,state:progress.phase==='complete'?'success':progress.phase==='processing'?'indeterminate':'active'});
+    },180000);
+    if(!result?.ok)throw new Error(result?.error||'O servidor não confirmou a gravação do resumo.');
+    state.editingSummaryId=summary.id;
+    setUploadProgress('summary',{percent:100,label:'Resumo salvo com sucesso',detail:'Atualizando a lista de resumos publicados.',state:'success'});
+    summaryStatus(`Resumo “${title}” salvo e publicado na Biblioteca.`,'ok');
+    await loadRemoteSummaries();
+    return summary;
+  }catch(error){
+    setUploadProgress('summary',{percent:100,label:'Não foi possível concluir o envio',detail:error?.message||String(error),state:'error'});
+    throw error;
+  }finally{$('saveSummary').disabled=false;hideUploadProgress('summary',2600);}
+}
+async function renameSummary(summaryId){const item=state.summaries.find(x=>String(x.id)===String(summaryId||state.editingSummaryId));if(!item){summaryStatus('Selecione primeiro um resumo para renomear.','warn');return;}if(state.editingSummaryId!==item.id)editSummary(item.id);const next=prompt('Novo título do resumo:',item.title);if(next===null)return;if(!next.trim()){alert('O título não pode ficar vazio.');return;}$('summaryTitle').value=next.trim();try{await persistSummary({title:next.trim()});summaryStatus(`Resumo renomeado para “${next.trim()}”.`,'ok');}catch(e){summaryStatus(e.message,'err');}}
+async function deleteSummary(summaryId){const item=state.summaries.find(x=>String(x.id)===String(summaryId||state.editingSummaryId));if(!item){summaryStatus('Selecione primeiro um resumo para excluir.','warn');return;}if(!confirm(`Excluir o resumo “${item.title}” da Biblioteca? O material deixará de aparecer no HZ MED.`))return;try{const result=await apiCall('editorDeleteSummary',{id:item.id},60000);if(!result?.ok)throw new Error(result?.error||'O servidor não confirmou a exclusão.');if(state.editingSummaryId===item.id)clearSummaryEditor();summaryStatus(`Resumo “${item.title}” excluído da Biblioteca.`,'ok');await loadRemoteSummaries();}catch(e){summaryStatus(e.message,'err');}}
+async function loadRemoteDatabase(){dbStatus('Conectando ao banco oficial…');$('reloadDb').disabled=true;$('reloadDbTop').disabled=true;try{const result=await apiCall('list',{},120000);const metas=(result?.stores?.exams||[]).filter(x=>!x.deleted);if(!metas.length){state.exams=[];state.dbLoaded=true;renderDatabase();dbStatus('A API respondeu, mas não retornou provas ativas.','warn');return;}
+  const full=[];for(let i=0;i<metas.length;i+=20){const batch=await apiCall('getMany',{ids:metas.slice(i,i+20).map(x=>String(x.id))},180000);(batch.exams||[]).forEach(item=>{if(item?.found!==false&&item?.data)full.push(item.data);});}
+  state.exams=full.map(exam=>({...exam,id:String(exam.id),questions:Array.isArray(exam.questions)?exam.questions:[]}));state.dbLoaded=true;renderDatabase();dbStatus(`Banco carregado: ${state.exams.length} prova(s), ${state.exams.reduce((n,x)=>n+x.questions.length,0)} questão(ões).`,'ok');
+ }catch(e){dbStatus(`${e.message} Confira se o Code.gs integrado foi publicado nesta implantação do Web App.`,'err');}finally{$('reloadDb').disabled=false;$('reloadDbTop').disabled=false;}}
+function renderDatabase(){const q=$('dbSearch').value.trim().toLowerCase(),specialtyFilter=$('dbSpecialtyFilter').value;const root=$('dbExamList');root.innerHTML='';const specialties=new Set();state.exams.forEach(ex=>ex.questions.forEach(item=>{const path=String(item.theme||item.tema||'').split('|').map(x=>x.trim()).filter(Boolean);const special=path[0]||item.specialty||'Não classificada';specialties.add(special);}));const select=$('dbSpecialtyFilter'),old=select.value;select.innerHTML='<option value="">Todas as especialidades</option>'+[...specialties].sort().map(x=>`<option>${esc(x)}</option>`).join('');if([...specialties].includes(old))select.value=old;
+  state.exams.forEach(exam=>{const filtered=exam.questions.filter(item=>{const path=String(item.theme||item.tema||'').split('|').map(x=>x.trim());const spec=path[0]||item.specialty||'Não classificada';const hay=`${exam.title} ${exam.institution} ${item.stem||item.enunciado} ${item.theme} ${spec}`.toLowerCase();return (!q||hay.includes(q))&&(!specialtyFilter||spec===specialtyFilter);});if(!filtered.length)return;
+    const card=document.createElement('section');card.className='exam-card';const scope=exam.moduleScope||'shared';card.innerHTML=`<div class="flex flex-wrap items-start justify-between gap-3 mb-3"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h2 class="text-base font-black">${esc(exam.title||'Prova sem título')}</h2><span class="pill">${scope==='database'?'SOMENTE BANCO':scope==='shared'?'COMPARTILHADA':'BQHZ'}</span></div><div class="text-xs muted mt-1">${esc(exam.institution||'Origem não informada')} ${exam.year?'· '+esc(exam.year):''} · ${exam.questions.length} questão(ões)</div></div><button class="btn danger" data-delete-exam="${esc(exam.id)}">Excluir prova inteira</button></div><div class="space-y-2">${filtered.map(item=>{const path=String(item.theme||item.tema||'').split('|').map(x=>x.trim()).filter(Boolean);return `<div class="rounded-xl p-3 flex flex-wrap items-center gap-3" style="background:#171725;border:1px solid #313148"><div class="min-w-0 flex-1"><div class="text-xs text-purple-200 font-black">Questão ${esc(item.number||'—')} · ${esc(path[0]||item.specialty||'Não classificada')}</div><div class="text-sm font-bold mt-1">${esc(cleanTextFromHtml(item.stem||item.enunciado).slice(0,170))}</div><div class="tiny muted mt-1">${esc(path.slice(1).join(' › ')||'Sem subtema')} · Gabarito ${esc(item.answerKey||item.gabarito||'—')}</div></div><button class="btn secondary" data-edit-question="${esc(exam.id)}|${esc(item.id)}">Editar</button><button class="btn danger" data-delete-question="${esc(exam.id)}|${esc(item.id)}">Excluir questão</button></div>`;}).join('')}</div>`;root.appendChild(card);
+  });if(!root.children.length)root.innerHTML='<div class="panel p-8 text-center text-sm muted">Nenhuma questão corresponde à busca atual.</div>';}
+function loadQuestionForEdit(examId,questionId){const exam=state.exams.find(x=>String(x.id)===String(examId));if(!exam)return;const q=exam.questions.find(x=>String(x.id)===String(questionId));if(!q)return;state.editingExamId=exam.id;state.editingQuestionId=q.id;state.editingExam=JSON.parse(JSON.stringify(exam));const legacyRich=Number(q.richStyleVersion||0)<2;const normalizeLoadedRich=legacyRich?normalizeImportedQuestionRich:normalizeQuestionRich;const mapped={id:q.id,number:q.number||1,stem:normalizeLoadedRich(q.stem||q.enunciado||''),alternatives:(q.alternatives||q.options||[]).map(x=>({id:x.id||x.letter,texto:normalizeLoadedRich(x.texto||x.text||''),correta:!!x.correta})),answerKey:q.answerKey||q.gabarito||'',commentary:normalizeLoadedRich(q.commentary||q.comentario||''),videoUrl:q.videoUrl||q.vimeoUrl||'',institution:q.institution||q.instituicao||exam.institution||'',year:q.year||q.ano||exam.year||'',theme:q.theme||q.tema||'',specialty:q.specialty||'',richStyleVersion:2};while(mapped.alternatives.length<4)mapped.alternatives.push({id:String.fromCharCode(65+mapped.alternatives.length),texto:''});state.drafts=[mapped];state.index=0;$('groupTitle').value=exam.title||'';$('shareWithBqhz').checked=(exam.moduleScope||'shared')!=='database';switchTab('editor');renderForm();status(`Editando questão ${mapped.number} de “${exam.title}”. Salve para publicar a alteração.`,'warn');}
+async function saveDrafts(){
+  syncCurrentForm();
+  if(!state.drafts.length){status('Não há questões para enviar.','warn');return;}
+  const invalid=state.drafts.map((q,i)=>({i,errors:validateQuestion(q)})).filter(x=>x.errors.length);
+  if(invalid.length){status(`Revise as questões: ${invalid.map(x=>`Q${x.i+1}: ${x.errors.join(', ')}`).join(' · ')}`,'err');return;}
+  const groupTitle=$('groupTitle').value.trim()||'Revalida - INEP',institution=$('sourceName').value.trim()||'Revalida - INEP',year=$('year').value.trim(),scope=$('shareWithBqhz').checked?'shared':'database';
+  $('saveQuestions').disabled=true;
+  setUploadProgress('question',{percent:2,label:'Preparando envio das questões…',detail:`${state.drafts.length} questão(ões) serão enviadas para “${groupTitle}”.`});
+  status('Preparando o envio para o Banco de Dados…');
+  try{
+    if(!state.dbLoaded){
+      setUploadProgress('question',{percent:null,label:'Consultando provas existentes…',detail:'Verificando a prova de destino para evitar duplicações.',state:'indeterminate'});
+      await loadRemoteDatabase();
+      if(!state.dbLoaded)throw new Error('Não foi possível consultar o banco remoto. Verifique a implantação do Code.gs antes de publicar, para evitar duplicar provas.');
+    }
+    let exam=state.editingExam?JSON.parse(JSON.stringify(state.editingExam)):state.exams.find(x=>keyText(x.title)===keyText(groupTitle)&&keyText(x.institution)===keyText(institution));
+    if(!exam){exam={id:`hzmed_${slug(groupTitle)}_${Date.now().toString(36)}`,title:groupTitle,specialty:'',year,institution,theme:'',moduleScope:scope,questions:[]};}
+    exam.title=groupTitle;exam.institution=institution;exam.year=year||exam.year||'';exam.moduleScope=scope;exam.updatedAt=new Date().toISOString();exam.questions=Array.isArray(exam.questions)?exam.questions:[];
+    let addedCount=0;
+    if(state.editingExamId&&state.editingQuestionId){
+      const q=state.drafts[0];const at=exam.questions.findIndex(x=>String(x.id)===String(state.editingQuestionId));const normalized=normalizeQuestionForBackend(q,exam,q.number);normalized.id=state.editingQuestionId;
+      if(at>=0)exam.questions[at]=normalized;else exam.questions.push(normalized);
+      addedCount=1;
+    }else{
+      let next=exam.questions.reduce((max,q)=>Math.max(max,Number(q.number)||0),0)+1;let duplicates=0;
+      for(const draft of state.drafts){const plain=keyText(cleanTextFromHtml(draft.stem));const existing=exam.questions.find(x=>keyText(cleanTextFromHtml(x.stem||x.enunciado))===plain);if(existing){duplicates++;continue;}const normalized=normalizeQuestionForBackend(draft,exam,next++);exam.questions.push(normalized);addedCount++;}
+      if(!addedCount)throw new Error(duplicates+' questão(ões) já existem com o mesmo enunciado nesta prova. Nenhuma duplicata foi enviada.');
+      if(duplicates&&!confirm(`${duplicates} questão(ões) repetida(s) foram ignoradas. Enviar as ${addedCount} nova(s)?`))throw new Error('Envio cancelado pelo usuário.');
+    }
+    setUploadProgress('question',{percent:3,label:'Enviando questões ao Google Apps Script…',detail:`Prova “${exam.title}” · ${exam.questions.length} questão(ões) no total · ${formatUploadBytes(new Blob([JSON.stringify(exam)]).size)}.`});
+    const result=await apiCallWithProgress('editorSaveExam',{exam},progress=>{
+      setUploadProgress('question',{percent:progress.percent,label:progress.label,detail:progress.detail,state:progress.phase==='complete'?'success':progress.phase==='processing'?'indeterminate':'active'});
+    },240000);
+    if(!result?.ok)throw new Error(result?.error||'O servidor não confirmou a gravação das questões.');
+    if(scope==='shared'){
+      try{
+        const pendingKey='hfoqo_bqhz_pending_shared_imports_v1';
+        const prev=JSON.parse(localStorage.getItem(pendingKey)||'[]');
+        const addedKeys=(exam.questions||[]).map(q=>String(q.id||`${exam.id}:${q.number}`));
+        const merged=Array.from(new Set([...(Array.isArray(prev)?prev.map(String):[]),...addedKeys,String(exam.id)]));
+        localStorage.setItem(pendingKey,JSON.stringify(merged));
+      }catch(e){console.warn('Sinalização BQHZ:',e);}
+    }
+    state.editingExamId=exam.id;state.editingExam=JSON.parse(JSON.stringify(exam));state.editingQuestionId=state.editingQuestionId||'';
+    setUploadProgress('question',{percent:100,label:'Questões salvas com sucesso',detail:'Atualizando o Banco de Dados com as questões publicadas.',state:'success'});
+    status(`Salvo no Banco de Dados: ${exam.questions.length} questão(ões) em “${exam.title}”.`,'ok');
+    await loadRemoteDatabase();
+  }catch(error){
+    setUploadProgress('question',{percent:100,label:'Não foi possível concluir o envio',detail:error?.message||String(error),state:'error'});
+    status(error?.message||String(error),'err');
+  }finally{
+    $('saveQuestions').disabled=false;
+    hideUploadProgress('question',2600);
+  }
+}
+async function deleteExam(examId){const exam=state.exams.find(x=>String(x.id)===String(examId));if(!exam)return;if(!confirm(`Excluir a prova inteira “${exam.title}” e todas as ${exam.questions.length} questão(ões)? Essa ação remove a prova do Banco de Dados, mas não apaga o histórico de progresso já salvo.`))return;try{await apiCall('editorDeleteExam',{id:examId});dbStatus(`Prova “${exam.title}” excluída.`,'ok');await loadRemoteDatabase();}catch(e){dbStatus(e.message,'err');}}
+async function deleteQuestion(examId,questionId){const exam=state.exams.find(x=>String(x.id)===String(examId));const q=exam?.questions.find(x=>String(x.id)===String(questionId));if(!exam||!q)return;if(!confirm(`Excluir somente a questão ${q.number||''} de “${exam.title}”?`))return;try{await apiCall('editorDeleteQuestion',{examId,questionId});dbStatus('Questão excluída.','ok');await loadRemoteDatabase();}catch(e){dbStatus(e.message,'err');}}
+function switchTab(tab){state.activeTab=tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));$('paneEditor').classList.toggle('hidden',tab!=='editor');$('paneDatabase').classList.toggle('hidden',tab!=='database');$('paneSummaries').classList.toggle('hidden',tab!=='summaries');if(tab==='database'&&!state.dbLoaded)loadRemoteDatabase();if(tab==='summaries'&&!state.summariesLoaded)loadRemoteSummaries();}
+function addQuestion(){syncCurrentForm();state.editingExamId='';state.editingQuestionId='';state.editingExam=null;state.drafts.push(makeBlankQuestion(state.drafts.length+1));state.index=state.drafts.length-1;renderForm();status('Nova questão criada. Preencha os campos e salve.');}
+function changeQuestion(delta){syncCurrentForm();state.index=Math.max(0,Math.min(state.drafts.length-1,state.index+delta));renderForm();}
+function validateAll(){syncCurrentForm();const q=getCurrent();if(!q){status('Nenhuma questão selecionada.','warn');return;}const errors=validateQuestion(q);status(errors.length?'Faltam: '+errors.join(', '):'Enunciado, alternativas, gabarito e tema estão preenchidos. Confira o conteúdo antes de publicar.',errors.length?'warn':'ok');}
+$('parseText').addEventListener('click',parsePastedText);$('clearPaste').addEventListener('click',()=>{$('pasteInput').value='';$('richPasteInput').innerHTML='';$('parseSummary').textContent='Nenhuma questão importada.';});$('prevQuestion').addEventListener('click',()=>changeQuestion(-1));$('nextQuestion').addEventListener('click',()=>changeQuestion(1));$('addOption').addEventListener('click',()=>{const q=getCurrent();if(!q||q.alternatives.length>=5)return;q.alternatives.push({id:'E',texto:''});renderOptions();});$('removeOption').addEventListener('click',()=>{const q=getCurrent();if(!q||q.alternatives.length<=4)return;const removed=q.alternatives.pop();if(q.answerKey===removed.id)q.answerKey='';renderOptions();});
+$('stemEditor').addEventListener('input',()=>{syncCurrentForm();});$('commentEditor').addEventListener('input',()=>{syncCurrentForm();});$('stemEditor').addEventListener('focus',e=>state.lastEditor=e.currentTarget);$('commentEditor').addEventListener('focus',e=>state.lastEditor=e.currentTarget);
+['questionNumber','sourceName','year','themePath','videoUrl','groupTitle'].forEach(id=>$(id).addEventListener('input',()=>syncCurrentForm()));$('shareWithBqhz').addEventListener('change',()=>{});
+$('refreshPreview').addEventListener('click',renderPreview);$('togglePreviewAnswer').addEventListener('click',()=>{state.previewAnswered=true;renderPreview();});$('hidePreviewAnswer').addEventListener('click',()=>{state.previewAnswered=false;renderPreview();});$('saveQuestions').addEventListener('click',saveDrafts);$('newQuestion').addEventListener('click',addQuestion);$('validateQuestion').addEventListener('click',validateAll);$('reloadDb').addEventListener('click',loadRemoteDatabase);$('reloadDbTop').addEventListener('click',loadRemoteDatabase);$('dbSearch').addEventListener('input',renderDatabase);$('dbSpecialtyFilter').addEventListener('change',renderDatabase);
+$('dbExamList').addEventListener('click',e=>{const delExam=e.target.closest('[data-delete-exam]');if(delExam){deleteExam(delExam.dataset.deleteExam);return;}const edit=e.target.closest('[data-edit-question]');if(edit){const [examId,qId]=edit.dataset.editQuestion.split('|');loadQuestionForEdit(examId,qId);return;}const del=e.target.closest('[data-delete-question]');if(del){const [examId,qId]=del.dataset.deleteQuestion.split('|');deleteQuestion(examId,qId);}});
+document.querySelectorAll('[data-tab]').forEach(btn=>btn.addEventListener('click',()=>switchTab(btn.dataset.tab)));
+$('makeImportant').addEventListener('click',()=>addTextToComment('<h3>✨ Nota de atualização ✨;</h3><div style="margin:12px 0;padding:14px;border:1px solid #b7791f;border-radius:12px;background:#fff7df;color:#5b3b0a"><strong>IMPORTANTE</strong><br>Digite a atualização, a diretriz e a data.</div>'));
+$('addExplanation').addEventListener('click',()=>addTextToComment('<h3>Explicação;</h3><p><strong>A) INCORRETA</strong> — Justifique a alternativa.</p><p><strong>B) INCORRETA</strong> — Justifique a alternativa.</p><p><strong>C) CORRETA</strong> — Explique por que está correta.</p><p><strong>D) INCORRETA</strong> — Justifique a alternativa.</p>'));
+$('addTakeHome').addEventListener('click',()=>addTextToComment('<h3>Take Home Message;</h3><p>Registre os pontos essenciais para memorizar.</p>'));
+$('addReferences').addEventListener('click',()=>addTextToComment('<h3>Referências;</h3><p>Insira as fontes bibliográficas.</p>'));
+$('exportJson').addEventListener('click',()=>{syncCurrentForm();const blob=new Blob([JSON.stringify({groupTitle:$('groupTitle').value,sourceName:$('sourceName').value,year:$('year').value,questions:state.drafts},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hz-med-questoes-rascunho.json';a.click();URL.revokeObjectURL(a.href);});
+$('importJsonBtn')?.addEventListener('click',()=>$('jsonFile').click());
+$('jsonFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{const d=JSON.parse(await file.text());state.drafts=Array.isArray(d.questions)?d.questions:[];state.index=0;$('groupTitle').value=d.groupTitle||'Revalida - INEP';$('sourceName').value=d.sourceName||'Revalida - INEP';$('year').value=d.year||'';renderForm();status('Rascunho JSON importado.','ok');}catch(err){status('Arquivo JSON inválido.','err');}e.target.value='';});
+$('summaryEditor').addEventListener('focus',e=>state.lastEditor=e.currentTarget);$('summaryEditor').addEventListener('input',renderSummaryPreview);['summaryTitle','summaryEmoji','summaryThemeColor','summaryThemeBackground'].forEach(id=>$(id).addEventListener('input',renderSummaryPreview));$('saveSummary').addEventListener('click',async()=>{try{await persistSummary();}catch(e){summaryStatus(e.message,'err');}});$('newSummary').addEventListener('click',clearSummaryEditor);$('renameSummary').addEventListener('click',()=>renameSummary());$('deleteSummary').addEventListener('click',()=>deleteSummary());$('refreshSummaryPreview').addEventListener('click',renderSummaryPreview);$('reloadSummaries').addEventListener('click',loadRemoteSummaries);$('summarySearch').addEventListener('input',renderSummaryDatabase);$('summaryList').addEventListener('click',e=>{const edit=e.target.closest('[data-summary-edit]');if(edit){editSummary(edit.dataset.summaryEdit);return;}const rename=e.target.closest('[data-summary-rename]');if(rename){renameSummary(rename.dataset.summaryRename);return;}const del=e.target.closest('[data-summary-delete]');if(del)deleteSummary(del.dataset.summaryDelete);});
+makeToolbar();state.drafts=[makeBlankQuestion(1)];renderForm();renderSummaryPreview();
+</script>
+</body>
+</html>
