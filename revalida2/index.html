@@ -698,8 +698,9 @@
               if (stamp(inc?.highlightsUpdatedAt) >= stamp(cur?.highlightsUpdatedAt)) mergedPdfs[pid] = inc;
             });
             const winnerVideos = hfoqoIsPlainObject(winnerAppAulas?.videos) ? winnerAppAulas.videos : {};
+            const winnerQuizzes = hfoqoIsPlainObject(winnerAppAulas?.quizzes) ? winnerAppAulas.quizzes : {};
             const winnerLastOpened = hfoqoIsPlainObject(winnerAppAulas?.lastOpened) ? winnerAppAulas.lastOpened : null;
-            const nextAulas = { videos: winnerVideos, pdfs: mergedPdfs, lastOpened: winnerLastOpened };
+            const nextAulas = { videos: winnerVideos, pdfs: mergedPdfs, quizzes: winnerQuizzes, lastOpened: winnerLastOpened };
             appState.aulasProgress = nextAulas;
             storage.hfoqo_aulas_progress_v1 = JSON.stringify(nextAulas);
             const resetStampStr = String(aulasVideosResetWinner.aulasVideosResetAt || winnerStore.hfoqo_aulas_videos_reset_at || '');
@@ -2454,6 +2455,702 @@
           return out;
         }
 
+        // =========================================================================
+        // MOTOR DE CORRELAÇÃO IMERSÃO (VÍDEO ↔ QUESTÕES & VÍDEO ↔ PDF POR TEMA)
+        // Safari 15+ seguro, 100% isolado da Trilha/Desafio Geral.
+        // =========================================================================
+        const AULAS_VIDEO_QUIZ_TARGET = 15;
+
+        const AULAS_STOPWORDS = new Set([
+          'de','da','do','das','dos','e','em','na','no','nas','nos','para','pra','por','com','sem',
+          'ao','aos','a','o','as','os','um','uma','uns','umas','que','sobre','ou','vs','versus','x',
+          'sua','suas','seu','seus','mais','menos','nao','pelo','pela','pelos','pelas','parte','part',
+          'i','ii','iii','iv','v','vi','1','2','3','4','5','01','02','03','04','05','modulo','aula',
+          'tema','subtema','pasta','geral','outra','outro','outras','outros','entre','como','quando'
+        ]);
+
+        const AULAS_ASPECT_WORDS = new Set([
+          'introducao','aspectos','gerais','geral','conceitos','conceito','visao','definicao','definicoes',
+          'epidemiologia','fisiopatologia','fisiopatogenia','etiologia','etiologias','patogenese','etiopatologia',
+          'quadro','clinico','clinica','clinicas','clinicos','apresentacao','apresentacoes','manifestacao','manifestacoes',
+          'suspeita','diagnostico','diagnosticos','diagnostica','diagnosticas','diferencial','diferenciais',
+          'propedeutica','investigacao','rastreio','rastreamento','triagem','exames','exame','complementar','complementares',
+          'laboratorio','laboratorial','laboratoriais','imagem','classificacao','classificacoes','estadiamento',
+          'estratificacao','gravidade','risco','tratamento','tratamentos','manejo','conduta','condutas','terapia',
+          'terapeutica','terapeuticas','terapeutico','terapeuticos','abordagem','inicial','iniciais','cirurgico',
+          'cirurgica','cirurgicas','cirurgicos','cirurgia','cirurgias','farmacologico','farmacologica','medicamentoso',
+          'conservador','paliativo','paliativa','curativo','curativa','complicacao','complicacoes','precoce','precoces',
+          'tardia','tardias','seguimento','prognostico','prevencao','profilaxia','atualizacao','atualizacoes',
+          'principais','principal','topico','topicos','causa','causas','tipo','tipos','forma','formas','especial',
+          'especiais','situacao','situacoes','fluxograma','fluxogramas','resumo','resumos','refratariedade','meta','metas',
+          'ficha','apostila','mapa','mental','slides','slide','material','materiais','completo','completa','pdf','mp4',
+          'interpretacao','parametros','racional','criterios','criterio','escores','escore','fatores','associados',
+          'indicacao','indicacoes','tecnica','tecnicas','escolha','complicacao','mecanismos','sintomas','sintomatico',
+          'sintomaticos','padrao','adicionais','agudo','aguda','cronico','cronica','estavel','exacerbada','consulta',
+          'principio','principios','fundamentos','especificidades','areas','atuacao','dados','avancado','situacao'
+        ]);
+
+        const AULAS_GENERIC_CONTEXT_WORDS = new Set([
+          'doenca','doencas','sindrome','sindromes','cancer','tumor','tumores','carcinoma','neoplasia','neoplasias',
+          'lesao','lesoes','infeccao','infeccoes','inflamatoria','inflamatorias','esofago','esofagica','esofagicas',
+          'estomago','gastrico','gastrica','colon','reto','colorretal','intestinal','intestinais','intestino',
+          'pulmao','pulmonar','pulmonares','rim','rins','renal','renais','figado','hepatico','hepatica','hepaticas',
+          'vesicula','biliar','biliares','pancreas','pancreatico','pancreaticas','cerebro','cerebral','nervoso',
+          'pele','cutanea','cutaneo','cutaneas','mama','mamaria','ovario','ovarios','uterino','utero','vagina','vulva',
+          'prostata','prostatica','ocular','olho','olhos','ouvido','nasal','artrite','artrites','articular','osso','osseo',
+          'osseos','vascular','vasculares','cardiaco','cardiaca','cardiacas','coracao','sangue','anemia','anemias',
+          'fratura','fraturas','trauma','traumas','atls','pals','urgencia','urgencias','emergencia','emergencias',
+          'ambulatorial','neonatal','neonato','congenita','congenito','congenitas','pediatria','pediatrica',
+          'pediatrico','infancia','infantil','crianca','criancas','gestacao','gestante','gestantes','gravidez',
+          'parto','puerperio','prenatal','adulto','adultos','idoso','idosos','geriatrica','mulher','bexiga','uretra',
+          'tireoide','adrenal','hipofise','paratireoide','pleural','pleura','mediastino','linfoma','leucemia',
+          'cefaleia','diarreia','hemorragia','obstrucao','obstrucoes','transtorno','transtornos','disturbio','disturbios',
+          'insuficiencia','agudos','cronicos','cronicas','agudas','benigno','benigna','benignos','benignas','maligno','maligna'
+        ]);
+
+        const AULAS_SYNONYM_GROUPS = [
+          ['acalasia','megaesofago'],
+          ['dup','ulcera peptica','doenca ulcerosa peptica'],
+          ['drge','rge','refluxo gastroesofagico'],
+          ['cec','carcinoma escamocelular','carcinoma epidermoide','escamocelular'],
+          ['paf','polipose adenomatosa familiar'],
+          ['hnpcc','lynch','sindrome de lynch'],
+          ['hda','hemorragia digestiva alta'],
+          ['hdb','hemorragia digestiva baixa'],
+          ['tev','tvp','tromboembolismo venoso','trombose venosa profunda'],
+          ['trm','raquimedular','trauma raquimedular','coluna vertebral'],
+          ['tce','cranioencefalico','traumatismo cranioencefalico'],
+          ['hic','hipertensao intracraniana'],
+          ['daop','daoc','doenca arterial obstrutiva periferica','obstrucao arterial'],
+          ['hpb','hiperplasia prostatica benigna'],
+          ['dac','doenca arterial coronariana'],
+          ['sca','iam','sindrome coronariana aguda','infarto agudo do miocardio'],
+          ['has','hipertensao arterial sistemica','hipertensao arterial'],
+          ['icfep','icfer','insuficiencia cardiaca'],
+          ['pcr','parada cardiorrespiratoria','aesp'],
+          ['dm','dm1','dm2','diabetes mellitus','diabetes'],
+          ['dii','doencas inflamatorias intestinais','crohn','retocolite'],
+          ['sii','sindrome do intestino irritavel'],
+          ['dhem','dhgna','esteatose hepatica','esteatotica'],
+          ['cbp','colangite biliar primaria'],
+          ['cep','colangite esclerosante primaria'],
+          ['pbe','peritonite bacteriana espontanea'],
+          ['shr','sindrome hepatorrenal'],
+          ['ptt','purpura trombocitopenica trombotica'],
+          ['pti','purpura trombocitopenica imunologica'],
+          ['civd','coagulacao intravascular disseminada'],
+          ['shu','sindrome hemolitico uremica','sindrome hemolitica uremica'],
+          ['dvw','von willebrand'],
+          ['lma','leucemia mieloide aguda','leucemia mielocitica aguda'],
+          ['lpa','leucemia promielocitica aguda'],
+          ['lla','leucemia linfoblastica aguda'],
+          ['lmc','leucemia mieloide cronica'],
+          ['llc','leucemia linfocitica cronica'],
+          ['tb','iltb','tuberculose'],
+          ['hiv','aids','tarv','antirretrovirais','pep'],
+          ['itu','infeccao do trato urinario','infeccao urinaria'],
+          ['ist','ists','dst'],
+          ['gnpe','glomerulonefrite pos estreptococica'],
+          ['ira','injuria renal aguda','insuficiencia renal aguda'],
+          ['nta','necrose tubular aguda'],
+          ['nia','nefrite intersticial aguda'],
+          ['atr','acidose tubular renal'],
+          ['drc','doenca renal cronica'],
+          ['drd','nefropatia diabetica'],
+          ['trs','hemodialise','dialise peritoneal','dialise'],
+          ['avc','avci','avch','acidente vascular cerebral'],
+          ['hsa','hemorragia subaracnoide'],
+          ['ela','esclerose lateral amiotrofica'],
+          ['dpoc','doenca pulmonar obstrutiva cronica'],
+          ['pac','pneumonia adquirida na comunidade','pneumonia comunitaria'],
+          ['tep','tromboembolismo pulmonar','embolia pulmonar'],
+          ['les','lupus eritematoso sistemico','lupus'],
+          ['ar','artrite reumatoide'],
+          ['saf','sindrome antifosfolipide'],
+          ['gpa','granulomatose com poliangiite','wegener'],
+          ['gepa','churg strauss','poliangiite eosinofilica'],
+          ['pam','poliangiite microscopica'],
+          ['sdra','desconforto respiratorio agudo','sindrome do desconforto respiratorio agudo'],
+          ['pocus','ultrassonografia'],
+          ['dip','doenca inflamatoria pelvica'],
+          ['spm','tdpm','sindrome pre menstrual'],
+          ['sua','sangramento uterino anormal','palm coein'],
+          ['sop','ovarios policisticos','sindrome ovariana metabolica poliendocrina'],
+          ['cco','papanicolaou','colo uterino','colo do utero'],
+          ['afbm','alteracoes funcionais benignas da mama'],
+          ['dpp','descolamento prematuro de placenta'],
+          ['dtg','doenca trofoblastica gestacional'],
+          ['rpmo','rotura prematura de membranas','amniorrexe'],
+          ['iic','insuficiencia istmo cervical'],
+          ['dhp','doenca hemolitica perinatal'],
+          ['hpp','hemorragia pos parto'],
+          ['aplv','alergia a proteina do leite de vaca'],
+          ['ttrn','taquipneia transitoria do recem nascido'],
+          ['sam','sindrome de aspiracao meconial'],
+          ['ecn','enterocolite necrosante'],
+          ['ddq','displasia do desenvolvimento do quadril'],
+          ['tdah','deficit de atencao'],
+          ['tea','espectro autista','autismo'],
+          ['ovace','corpo estranho'],
+          ['ivas','vias aereas superiores'],
+          ['oma','otite media aguda'],
+          ['fssl','febre sem sinais localizatorios'],
+          ['mfc','medicina de familia e comunidade','aps','atencao primaria'],
+          ['esf','estrategia de saude da familia'],
+          ['pts','projeto terapeutico singular'],
+          ['rcop','registro clinico orientado por problemas'],
+          ['toc','transtorno obsessivo compulsivo'],
+          ['sahos','saos','apneia obstrutiva do sono'],
+          ['tus','substancia psicoativa'],
+          ['saa','sindrome da abstinencia alcoolica'],
+          ['alns','auto lesao nao suicida'],
+          ['aga','avaliacao geriatrica ampla'],
+          ['cpre','colangiopancreatografia'],
+          ['bierads','bi rads'],
+          ['popq','pop q']
+        ];
+
+        const AULAS_SYNONYM_MAP = (() => {
+          const map = new Map();
+          const normRaw = (v) => String(v || '')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+          AULAS_SYNONYM_GROUPS.forEach((group, idx) => {
+            const symKey = `syn_${idx}`;
+            group.forEach(term => {
+              const norm = normRaw(term);
+              if (!norm) return;
+              if (!map.has(norm)) map.set(norm, []);
+              map.get(norm).push(symKey);
+            });
+          });
+          return map;
+        })();
+
+        function normalizeAulasMatchText(value) {
+          let s = String(value || '')
+            .replace(/\.(?:mp4|mkv|webm|mov|avi|m4v|pdf)$/i, '')
+            .replace(/\(\s*c[oó]pia\s*\d*\s*\)/gi, ' ')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+          s = s
+            .replace(/\btransporte\s+hepatico\b/g, 'transplante hepatico')
+            .replace(/\babome\s+agudo\b/g, 'abdome agudo')
+            .replace(/\benxaquexa\b/g, 'enxaqueca')
+            .replace(/\bhirschprung\b/g, 'hirschsprung')
+            .replace(/\bpan\s+hipoptuitarismo\b/g, 'pan hipopituitarismo')
+            .replace(/\bmiscelania\b/g, 'miscelanea')
+            .replace(/\bepistaxis\b/g, 'epistaxe')
+            .replace(/\balcolica\b/g, 'alcoolica')
+            .replace(/\bescamocelular\b/g, 'escamocelular epidermoide')
+            .replace(/\bloef+ler\b/g, 'loeffler')
+            .replace(/\bsjogren\b/g, 'sjogren')
+            .replace(/\bsanarf?lix\b/g, ' ');
+          return s.replace(/[’'`´]/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        function extractAulasTokens(normStr, minLen = 2) {
+          if (!normStr) return [];
+          const out = [];
+          const seen = new Set();
+          for (const tok of String(normStr).split(' ')) {
+            if (!tok || tok.length < minLen || AULAS_STOPWORDS.has(tok) || seen.has(tok)) continue;
+            seen.add(tok);
+            out.push(tok);
+          }
+          return out;
+        }
+
+        function expandAulasTokensWithSynonyms(normPhrase, rawTokens) {
+          const out = new Set(rawTokens || []);
+          const phraseSym = AULAS_SYNONYM_MAP.get(normPhrase);
+          if (phraseSym) phraseSym.forEach(k => out.add(k));
+          (rawTokens || []).forEach(tok => {
+            const sym = AULAS_SYNONYM_MAP.get(tok);
+            if (sym) sym.forEach(k => out.add(k));
+          });
+          // Also check multi-word synonym phrases contained inside normPhrase
+          if (normPhrase && normPhrase.indexOf(' ') >= 0) {
+            AULAS_SYNONYM_MAP.forEach((symKeys, term) => {
+              if (term.indexOf(' ') >= 0 && (` ${normPhrase} `).includes(` ${term} `)) {
+                symKeys.forEach(k => out.add(k));
+              }
+            });
+          }
+          return Array.from(out);
+        }
+
+        function parseAulasVideoDescriptor(video) {
+          const v = video && typeof video === 'object' ? video : {};
+          const titleRaw = String(v.title || '').replace(/\.(?:mp4|mkv|webm|mov|avi|m4v)$/i, '').replace(/\(\s*c[oó]pia\s*\d*\s*\)/gi, ' ').trim();
+          const titleFullNorm = normalizeAulasMatchText(titleRaw);
+          const rawSegments = titleRaw.split(/\s+[-–—|:]\s+/).map(s => normalizeAulasMatchText(s)).filter(Boolean);
+          const entitySegments = [];
+          const aspectSegments = [];
+          rawSegments.forEach(seg => {
+            const toks = extractAulasTokens(seg, 2);
+            const nonAspect = toks.filter(t => !AULAS_ASPECT_WORDS.has(t));
+            if (nonAspect.length > 0) entitySegments.push(seg);
+            else if (toks.length > 0) aspectSegments.push(seg);
+          });
+          if (!entitySegments.length && titleFullNorm) entitySegments.push(titleFullNorm);
+
+          const primaryEntitySeg = entitySegments.length ? entitySegments[entitySegments.length - 1] : titleFullNorm;
+          const umbrellaEntitySeg = entitySegments.length > 1 ? entitySegments[entitySegments.length - 2] : '';
+
+          const folderNorm = normalizeAulasMatchText([v.folderName, v.theme].filter(Boolean).join(' '));
+          const specialtyNorm = normalizeAulasMatchText(v.specialtyName || '');
+          const folderTokens = extractAulasTokens(folderNorm, 3).filter(t => !AULAS_ASPECT_WORDS.has(t));
+          const folderExpanded = expandAulasTokensWithSynonyms(folderNorm, folderTokens);
+
+          const rawEntityTokens = [];
+          const seenRaw = new Set();
+          entitySegments.forEach(seg => {
+            extractAulasTokens(seg, 2).forEach(tok => {
+              if (!AULAS_ASPECT_WORDS.has(tok) && !seenRaw.has(tok)) {
+                seenRaw.add(tok);
+                rawEntityTokens.push(tok);
+              }
+            });
+          });
+          if (!rawEntityTokens.length) {
+            extractAulasTokens(titleFullNorm, 2).forEach(tok => {
+              if (!seenRaw.has(tok)) { seenRaw.add(tok); rawEntityTokens.push(tok); }
+            });
+          }
+
+          const coreTokens = expandAulasTokensWithSynonyms(
+            entitySegments.join(' '),
+            rawEntityTokens
+          );
+          const primaryRawTokens = extractAulasTokens(primaryEntitySeg, 2).filter(t => !AULAS_ASPECT_WORDS.has(t));
+          const primaryTokens = expandAulasTokensWithSynonyms(primaryEntitySeg, primaryRawTokens);
+
+          const aspectTokens = [];
+          const seenAsp = new Set();
+          extractAulasTokens(titleFullNorm, 3).forEach(tok => {
+            if (AULAS_ASPECT_WORDS.has(tok) && !seenAsp.has(tok)) {
+              seenAsp.add(tok);
+              aspectTokens.push(tok);
+            }
+          });
+
+          const folderSet = new Set([...folderTokens, ...extractAulasTokens(specialtyNorm, 3)]);
+          const nonFolderCore = rawEntityTokens.filter(t => !folderSet.has(t) && !AULAS_GENERIC_CONTEXT_WORDS.has(t));
+          const isIntroToFolder = nonFolderCore.length === 0 && (folderTokens.length > 0 || specialtyNorm.length > 0);
+
+          return {
+            titleFullNorm,
+            rawSegments,
+            entitySegments,
+            aspectSegments,
+            primaryEntitySeg,
+            umbrellaEntitySeg,
+            rawEntityTokens,
+            coreTokens,
+            primaryRawTokens,
+            primaryTokens,
+            aspectTokens,
+            folderNorm,
+            specialtyNorm,
+            folderTokens: folderExpanded,
+            isIntroToFolder
+          };
+        }
+
+        function buildAulasQuestionIndex(questions) {
+          const list = Array.isArray(questions) ? questions : [];
+          const entries = [];
+          const seenIds = new Set();
+          const tokenToIndices = new Map();
+          const stemTokenToIndices = new Map();
+          const docFreq = new Map();
+
+          const pushIndex = (map, key, idx) => {
+            let bucket = map.get(key);
+            if (!bucket) { bucket = []; map.set(key, bucket); }
+            bucket.push(idx);
+          };
+
+          for (let i = 0; i < list.length; i++) {
+            const q = list[i];
+            if (!q || q.id == null) continue;
+            const id = String(q.id);
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
+
+            const tagSources = [
+              q.temaGeral,
+              q.temaPath,
+              q.temaNome,
+              q.subtema,
+              q.theme,
+              Array.isArray(q.temaTags) ? q.temaTags.join(' | ') : '',
+              Array.isArray(q.taxonomyTags) ? q.taxonomyTags.join(' | ') : ''
+            ].filter(Boolean);
+            const rawTagCombined = tagSources.join(' | ');
+            const segmentsNorm = rawTagCombined
+              .split(/\s*(?:\||;|›|»|→|\/|[-–—])\s*/g)
+              .map(seg => normalizeAulasMatchText(seg))
+              .filter(Boolean);
+            const tagFullNorm = normalizeAulasMatchText(rawTagCombined);
+            const rawTagTokens = extractAulasTokens(tagFullNorm, 2);
+            const tagTokenSet = new Set(expandAulasTokensWithSynonyms(tagFullNorm, rawTagTokens));
+
+            const stemRaw = String(q.plainText || q.enunciado || q.stem || '').replace(/<[^>]*>/g, ' ').slice(0, 600);
+            const stemNorm = normalizeAulasMatchText(stemRaw);
+            const rawStemTokens = extractAulasTokens(stemNorm, 4);
+            const stemTokenSet = new Set(expandAulasTokensWithSynonyms(stemNorm, rawStemTokens));
+
+            const specNorm = normalizeAulasMatchText(q.especialidade || q.temaEspecialidade || '');
+            const entryIdx = entries.length;
+            entries.push({
+              q,
+              id,
+              tagFullNorm,
+              segmentsNorm,
+              tagTokenSet,
+              stemNorm,
+              stemTokenSet,
+              specNorm
+            });
+
+            tagTokenSet.forEach(tok => {
+              pushIndex(tokenToIndices, tok, entryIdx);
+              docFreq.set(tok, (docFreq.get(tok) || 0) + 1);
+            });
+            stemTokenSet.forEach(tok => {
+              if (tok.length >= 5 || tok.startsWith('syn_')) {
+                pushIndex(stemTokenToIndices, tok, entryIdx);
+              }
+            });
+          }
+
+          return {
+            entries,
+            tokenToIndices,
+            stemTokenToIndices,
+            docFreq,
+            totalQuestions: entries.length
+          };
+        }
+
+        function matchQuestionsForAulasVideo(video, qIndex, options = {}) {
+          const limit = Math.max(1, Number(options.limit || AULAS_VIDEO_QUIZ_TARGET));
+          const fallbackToFolder = Boolean(options.fallbackToFolder);
+          if (!video || !qIndex || !Array.isArray(qIndex.entries) || !qIndex.entries.length) {
+            return { questions: [], totalMatched: 0, matchLevel: 'none', ids: [] };
+          }
+          const desc = parseAulasVideoDescriptor(video);
+          const candidateCounts = new Map();
+          const addCandidateBucket = (tok, weight) => {
+            const bucket = qIndex.tokenToIndices.get(tok);
+            if (!bucket) return;
+            for (let i = 0; i < bucket.length; i++) {
+              const idx = bucket[i];
+              candidateCounts.set(idx, (candidateCounts.get(idx) || 0) + weight);
+            }
+          };
+
+          desc.primaryTokens.forEach(tok => addCandidateBucket(tok, 3));
+          desc.coreTokens.forEach(tok => addCandidateBucket(tok, 2));
+          if (desc.isIntroToFolder || fallbackToFolder) {
+            desc.folderTokens.forEach(tok => addCandidateBucket(tok, 1));
+          }
+          // Stem fallback candidate retrieval for distinctive tokens (>=5 chars or synonym keys)
+          desc.coreTokens.forEach(tok => {
+            if ((tok.length >= 5 || tok.startsWith('syn_')) && !AULAS_GENERIC_CONTEXT_WORDS.has(tok)) {
+              const bucket = qIndex.stemTokenToIndices.get(tok);
+              if (!bucket || bucket.length > 600) return;
+              for (let i = 0; i < bucket.length; i++) {
+                const idx = bucket[i];
+                if (!candidateCounts.has(idx)) candidateCounts.set(idx, 1);
+              }
+            }
+          });
+
+          const videoSpecKey = normalizeAulasMatchText(video.specialtyName || '');
+          const isPedVideo = /\bpediatri/.test(videoSpecKey) || /\bneonat/.test(desc.folderNorm);
+          const isObsVideo = /\bobstetric/.test(videoSpecKey) || /\bobstetric/.test(desc.folderNorm);
+          const primaryDistinctive = desc.primaryTokens.filter(t => !AULAS_GENERIC_CONTEXT_WORDS.has(t));
+          const checkCoverageTokens = primaryDistinctive.length ? primaryDistinctive : desc.primaryTokens;
+          const videoHashSeed = String(video.id || video.title || 'vid');
+
+          const scoreEntry = (entry, relaxedFolderMode = false) => {
+            let score = 0;
+            if (!entry) return 0;
+
+            // 1. Exact full title or primary entity phrase in tags
+            if (desc.titleFullNorm && entry.tagFullNorm && (entry.tagFullNorm.includes(desc.titleFullNorm) || (entry.tagFullNorm.length >= 6 && desc.titleFullNorm.includes(entry.tagFullNorm)))) {
+              score += 130;
+            }
+            if (desc.primaryEntitySeg && desc.primaryEntitySeg.length >= 4) {
+              const exactSegHit = entry.segmentsNorm.some(s => s === desc.primaryEntitySeg) ||
+                (desc.primaryEntitySeg.includes(' ') && (` ${entry.tagFullNorm} `).includes(` ${desc.primaryEntitySeg} `));
+              if (exactSegHit) score += 95;
+            }
+            if (desc.umbrellaEntitySeg && desc.umbrellaEntitySeg.length >= 4) {
+              const umbHit = entry.segmentsNorm.some(s => s === desc.umbrellaEntitySeg) ||
+                (desc.umbrellaEntitySeg.includes(' ') && (` ${entry.tagFullNorm} `).includes(` ${desc.umbrellaEntitySeg} `));
+              if (umbHit) score += 45;
+            }
+
+            // 2. Tag token overlap weighted by specificity (IDF)
+            let primaryRawMatched = 0;
+            let primaryGenericOnlyMatched = 0;
+            let covMatched = 0;
+            desc.primaryTokens.forEach(tok => {
+              if (!entry.tagTokenSet.has(tok)) return;
+              const df = qIndex.docFreq.get(tok) || 999;
+              const isGen = AULAS_GENERIC_CONTEXT_WORDS.has(tok);
+              const w = isGen ? 12 : (df < 40 ? 36 : df < 150 ? 28 : 20);
+              score += w;
+              if (!isGen) primaryRawMatched++;
+              else primaryGenericOnlyMatched++;
+            });
+            if (checkCoverageTokens.length > 0) {
+              checkCoverageTokens.forEach(tok => {
+                if (entry.tagTokenSet.has(tok)) covMatched++;
+              });
+              // Handle synonym match group: count raw primary words covered either directly or via synonym key
+              let rawWordCov = 0;
+              desc.primaryRawTokens.forEach(rt => {
+                if (entry.tagTokenSet.has(rt)) { rawWordCov++; return; }
+                const syms = AULAS_SYNONYM_MAP.get(rt);
+                if (syms && syms.some(sk => entry.tagTokenSet.has(sk))) rawWordCov++;
+              });
+              if (desc.primaryRawTokens.length >= 2 && rawWordCov >= desc.primaryRawTokens.length) {
+                score += 38;
+              }
+            }
+
+            // Umbrella / secondary entity tokens in tags
+            desc.coreTokens.forEach(tok => {
+              if (desc.primaryTokens.includes(tok)) return;
+              if (!entry.tagTokenSet.has(tok)) return;
+              const isGen = AULAS_GENERIC_CONTEXT_WORDS.has(tok);
+              score += isGen ? 7 : 18;
+            });
+
+            // 3. Aspect / sub-angle alignment (Clínica, Diagnóstico, Tratamento, etc.)
+            let aspectMatches = 0;
+            desc.aspectTokens.forEach(tok => {
+              if (entry.tagTokenSet.has(tok)) { score += 13; aspectMatches++; }
+              else if (entry.stemTokenSet.has(tok)) { score += 5; aspectMatches++; }
+            });
+
+            // 4. Folder / Specialty alignment (soft boost — preserves IOG institution names!)
+            let folderMatches = 0;
+            desc.folderTokens.forEach(tok => {
+              if (entry.tagTokenSet.has(tok)) { score += 16; folderMatches++; }
+            });
+            if (videoSpecKey && entry.specNorm && (entry.specNorm.includes(videoSpecKey) || videoSpecKey.includes(entry.specNorm))) {
+              score += 18;
+            }
+            if (isPedVideo && (entry.tagTokenSet.has('pediatria') || entry.tagTokenSet.has('infancia') || entry.tagTokenSet.has('infantil') || entry.tagTokenSet.has('neonatal') || entry.tagTokenSet.has('neonato'))) {
+              score += 20;
+            }
+            if (isObsVideo && (entry.tagTokenSet.has('obstetricia') || entry.tagTokenSet.has('gestacao') || entry.tagTokenSet.has('gestante') || entry.tagTokenSet.has('prenatal'))) {
+              score += 20;
+            }
+
+            // 5. Stem fallback when tags are sparse
+            if (desc.primaryEntitySeg && desc.primaryEntitySeg.includes(' ') && desc.primaryEntitySeg.length >= 8 && (` ${entry.stemNorm} `).includes(` ${desc.primaryEntitySeg} `)) {
+              score += 36;
+            } else if (primaryRawMatched === 0 && !relaxedFolderMode) {
+              let stemHits = 0;
+              desc.coreTokens.forEach(tok => {
+                if ((tok.length >= 5 || tok.startsWith('syn_')) && !AULAS_GENERIC_CONTEXT_WORDS.has(tok) && entry.stemTokenSet.has(tok)) {
+                  stemHits++;
+                }
+              });
+              score += Math.min(34, stemHits * 15);
+            }
+
+            // Guard against generic organ-only collisions when a disease word exists in primaryEntitySeg
+            if (!desc.isIntroToFolder && !relaxedFolderMode && primaryDistinctive.length > 0 && primaryRawMatched === 0 && score < 55) {
+              // No distinctive primary token matched in tags and not exact stem phrase -> check stem synonym hit
+              let hasStemDistinctive = false;
+              primaryDistinctive.forEach(tok => {
+                if ((tok.length >= 5 || tok.startsWith('syn_')) && entry.stemTokenSet.has(tok)) hasStemDistinctive = true;
+              });
+              if (!hasStemDistinctive) score = Math.min(score, 24);
+            }
+            // Extra bonus when topic match + folder overlap co-occur
+            if (primaryRawMatched > 0 && folderMatches > 0) score += 12;
+            void aspectMatches; void primaryGenericOnlyMatched; void covMatched;
+            return score;
+          };
+
+          const minThreshold = desc.isIntroToFolder ? 22 : 34;
+          const scored = [];
+          candidateCounts.forEach((_, idx) => {
+            const entry = qIndex.entries[idx];
+            const s = scoreEntry(entry, false);
+            if (s >= minThreshold) {
+              scored.push({
+                entry,
+                score: s,
+                tie: stableHash(`${videoHashSeed}:${entry.id}`)
+              });
+            }
+          });
+
+          if (scored.length > 0) {
+            scored.sort((a, b) => (b.score - a.score) || (a.tie < b.tie ? -1 : a.tie > b.tie ? 1 : 0));
+            const picked = scored.slice(0, limit).map(x => x.entry.q);
+            return {
+              questions: picked,
+              totalMatched: scored.length,
+              matchLevel: 'topic',
+              ids: picked.map(q => String(q.id))
+            };
+          }
+
+          if (fallbackToFolder && desc.folderTokens.length > 0) {
+            const folderCandidates = new Map();
+            desc.folderTokens.forEach(tok => {
+              const bucket = qIndex.tokenToIndices.get(tok);
+              if (bucket) bucket.forEach(idx => folderCandidates.set(idx, true));
+            });
+            const relaxed = [];
+            folderCandidates.forEach((_, idx) => {
+              const entry = qIndex.entries[idx];
+              const s = scoreEntry(entry, true);
+              if (s >= 16) {
+                relaxed.push({ entry, score: s, tie: stableHash(`${videoHashSeed}:${entry.id}`) });
+              }
+            });
+            if (relaxed.length > 0) {
+              relaxed.sort((a, b) => (b.score - a.score) || (a.tie < b.tie ? -1 : a.tie > b.tie ? 1 : 0));
+              const picked = relaxed.slice(0, limit).map(x => x.entry.q);
+              return {
+                questions: picked,
+                totalMatched: relaxed.length,
+                matchLevel: 'folder',
+                ids: picked.map(q => String(q.id))
+              };
+            }
+          }
+
+          return { questions: [], totalMatched: 0, matchLevel: 'none', ids: [] };
+        }
+
+        function matchPdfsForAulasVideo(video, candidatePdfs) {
+          const list = Array.isArray(candidatePdfs) ? candidatePdfs : [];
+          if (!video || !list.length) return [];
+          const desc = parseAulasVideoDescriptor(video);
+          const videoFullSet = new Set([...desc.coreTokens, ...desc.primaryTokens]);
+          const videoRawSet = new Set(desc.rawEntityTokens);
+          const seenPdfIds = new Set();
+          const scored = [];
+
+          for (let i = 0; i < list.length; i++) {
+            const pdf = list[i];
+            if (!pdf || !pdf.id) continue;
+            const pid = String(pdf.id);
+            if (seenPdfIds.has(pid)) continue;
+            seenPdfIds.add(pid);
+
+            const pdfRaw = String(pdf.title || '').replace(/\.pdf$/i, '').trim();
+            const pdfFullNorm = normalizeAulasMatchText(pdfRaw);
+            const pdfSegs = pdfRaw
+              .split(/\s+[-–—|:]\s+/)
+              .map(seg => normalizeAulasMatchText(seg))
+              .filter(Boolean);
+            // Remove trailing aspect/PDF-type words to isolate the disease/topic of the PDF
+            const pdfCleanSegs = pdfSegs.filter(seg => {
+              const toks = extractAulasTokens(seg, 2);
+              return toks.some(t => !AULAS_ASPECT_WORDS.has(t));
+            });
+            const pdfTopicNorm = pdfCleanSegs.length ? pdfCleanSegs.join(' ') : pdfFullNorm;
+            const pdfTopicRawTokens = extractAulasTokens(pdfTopicNorm, 2).filter(t => !AULAS_ASPECT_WORDS.has(t));
+            if (!pdfTopicRawTokens.length) continue;
+            const pdfTopicExpanded = expandAulasTokensWithSynonyms(pdfTopicNorm, pdfTopicRawTokens);
+            const pdfTopicSet = new Set(pdfTopicExpanded);
+
+            let score = 0;
+            // Exact entity segment match between video and cleaned PDF topic
+            const exactEntityHit = desc.entitySegments.some(vSeg =>
+              vSeg.length >= 4 && pdfCleanSegs.some(pSeg =>
+                pSeg === vSeg ||
+                (pSeg.length >= 6 && vSeg.includes(pSeg)) ||
+                (vSeg.length >= 6 && pSeg.includes(vSeg))
+              )
+            );
+            if (exactEntityHit) score += 120;
+
+            let overlapAll = 0;
+            let overlapDistinctive = 0;
+            const seenHit = new Set();
+            pdfTopicExpanded.forEach(tok => {
+              if (!seenHit.has(tok) && videoFullSet.has(tok)) {
+                seenHit.add(tok);
+                overlapAll++;
+                if (!AULAS_GENERIC_CONTEXT_WORDS.has(tok)) {
+                  overlapDistinctive++;
+                  score += 36;
+                } else {
+                  score += 12;
+                }
+              }
+            });
+
+            // Check distinctive mismatch: if PDF is clearly about another disease in the same organ (e.g. Cancer de Esofago PDF while watching Acalasia)
+            const pdfDistinctiveRaw = pdfTopicRawTokens.filter(t => !AULAS_GENERIC_CONTEXT_WORDS.has(t));
+            const videoDistinctiveRaw = desc.rawEntityTokens.filter(t => !AULAS_GENERIC_CONTEXT_WORDS.has(t));
+            const pdfDistinctiveOverlap = pdfDistinctiveRaw.filter(t => {
+              if (videoRawSet.has(t) || videoFullSet.has(t)) return true;
+              const syms = AULAS_SYNONYM_MAP.get(t);
+              return Boolean(syms && syms.some(sk => videoFullSet.has(sk)));
+            }).length;
+            const videoDistinctiveOverlap = videoDistinctiveRaw.filter(t => {
+              if (pdfTopicSet.has(t)) return true;
+              const syms = AULAS_SYNONYM_MAP.get(t);
+              return Boolean(syms && syms.some(sk => pdfTopicSet.has(sk)));
+            }).length;
+
+            // Reject organ-only false collision when PDF names a different disease word not in the video
+            if (!exactEntityHit && pdfDistinctiveRaw.length > 0 && pdfDistinctiveOverlap === 0) {
+              continue;
+            }
+            if (!exactEntityHit && videoDistinctiveRaw.length > 0 && videoDistinctiveOverlap === 0 && overlapDistinctive === 0) {
+              continue;
+            }
+
+            // Ratio bonus when all/most PDF topic words appear in video or vice versa
+            const minDenom = Math.max(1, Math.min(pdfTopicRawTokens.length, desc.rawEntityTokens.length));
+            const rawMatches = pdfTopicRawTokens.filter(t => {
+              if (videoRawSet.has(t)) return true;
+              const syms = AULAS_SYNONYM_MAP.get(t);
+              return Boolean(syms && syms.some(sk => videoRawSet.has(sk)));
+            }).length;
+            const ratio = rawMatches / minDenom;
+            if (ratio >= 0.75) score += 35;
+            else if (ratio >= 0.5) score += 20;
+
+            // Aspect alignment bonus (e.g., if PDF specifically mentions Diagnostico or Tratamento)
+            desc.aspectTokens.forEach(tok => {
+              if (normalizeAulasMatchText(pdfRaw).includes(tok)) score += 6;
+            });
+
+            // Prefer PDF from same folder over global/specialty fallback
+            if (video.folderName && pdf.originLabel && normalizeAulasMatchText(pdf.originLabel) === normalizeAulasMatchText(video.folderName)) {
+              score += 10;
+            }
+
+            if (score >= 45 && (exactEntityHit || overlapDistinctive >= 1 || ratio >= 0.6)) {
+              scored.push({ pdf, score });
+            }
+          }
+
+          scored.sort((a, b) => (b.score - a.score) || String(a.pdf.title || '').localeCompare(String(b.pdf.title || ''), 'pt-BR'));
+          return scored.map(item => item.pdf);
+        }
+
         const PdfPageCanvas = React.memo(({
           pdfDoc,
           pageNumber,
@@ -3542,6 +4239,574 @@
           );
         };
 
+        const AulasVideoQuizModal = ({
+          video,
+          questions = [],
+          fallbackQuestions = [],
+          quizRecord = null,
+          videoCompleted = false,
+          isDark = true,
+          onRecordAnswer,
+          onResetQuiz,
+          onMarkVideoCompleted,
+          onClose
+        }) => {
+          const [useFallback, setUseFallback] = useState(false);
+          const activeList = (questions && questions.length > 0)
+            ? questions
+            : (useFallback ? (fallbackQuestions || []) : []);
+          const savedAnswers = quizRecord?.answers || {};
+
+          const initialDone = Boolean(
+            activeList.length > 0 &&
+            (quizRecord?.completed || activeList.every(q => Boolean(savedAnswers[String(q.id)])))
+          );
+          const initialIndex = useMemo(() => {
+            if (!activeList.length) return 0;
+            const firstOpen = activeList.findIndex(q => !savedAnswers[String(q.id)]);
+            return firstOpen >= 0 ? firstOpen : 0;
+          }, [video?.id, useFallback]);
+
+          const [currentIdx, setCurrentIdx] = useState(initialIndex);
+          const [showSummary, setShowSummary] = useState(initialDone);
+          const [selectedOpt, setSelectedOpt] = useState(null);
+          const [eliminatedOpts, setEliminatedOpts] = useState([]);
+          const [imageViewer, setImageViewer] = useState(null);
+          const bodyScrollRef = React.useRef(null);
+
+          useEffect(() => {
+            setUseFallback(false);
+            setSelectedOpt(null);
+            setEliminatedOpts([]);
+            setImageViewer(null);
+            const list = (questions && questions.length > 0) ? questions : [];
+            const ans = quizRecord?.answers || {};
+            const allDone = Boolean(list.length > 0 && (quizRecord?.completed || list.every(q => Boolean(ans[String(q.id)]))));
+            setShowSummary(allDone);
+            if (list.length > 0) {
+              const firstOpen = list.findIndex(q => !ans[String(q.id)]);
+              setCurrentIdx(firstOpen >= 0 ? firstOpen : 0);
+            } else {
+              setCurrentIdx(0);
+            }
+          }, [video?.id]);
+
+          const safeIdx = activeList.length > 0 ? Math.max(0, Math.min(currentIdx, activeList.length - 1)) : 0;
+          const qData = activeList[safeIdx] || null;
+          const qid = qData ? String(qData.id) : '';
+          const recorded = qid ? savedAnswers[qid] : null;
+          const isAnswered = Boolean(recorded);
+
+          useEffect(() => {
+            if (!qData) {
+              setSelectedOpt(null);
+              setEliminatedOpts([]);
+              return;
+            }
+            const rec = savedAnswers[String(qData.id)];
+            setSelectedOpt(rec?.selected ? String(rec.selected) : null);
+            setEliminatedOpts([]);
+            if (bodyScrollRef.current) {
+              bodyScrollRef.current.scrollTop = 0;
+            }
+          }, [qid, showSummary]);
+
+          const total = activeList.length;
+          const activeIds = activeList.map(q => String(q.id));
+          let answeredCount = 0;
+          let correctCount = 0;
+          activeList.forEach(q => {
+            const a = savedAnswers[String(q.id)];
+            if (a && a.selected) {
+              answeredCount++;
+              if (a.correct) correctCount++;
+            }
+          });
+          const wrongCount = Math.max(0, answeredCount - correctCount);
+          const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+          const allAnswered = total > 0 && answeredCount >= total;
+
+          const handleConfirm = () => {
+            if (!qData || !selectedOpt || isAnswered) return;
+            const selected = (qData.opcoes || []).find(o => String(o.id) === String(selectedOpt));
+            const answerKey = String(qData.answerKey || '').trim().toUpperCase();
+            const selectedKey = String(selectedOpt || '').trim().toUpperCase();
+            const correct = answerKey ? (selectedKey === answerKey) : (selected ? parseBooleanLike(selected.correta, false) : false);
+            onRecordAnswer?.(video, activeIds, String(qData.id), selectedKey, correct);
+          };
+
+          const handleNextOrFinish = () => {
+            if (!isAnswered) return;
+            if (safeIdx < total - 1) {
+              setCurrentIdx(safeIdx + 1);
+            } else {
+              setShowSummary(true);
+            }
+          };
+
+          const toggleEliminate = (optId, e) => {
+            e?.preventDefault?.();
+            e?.stopPropagation?.();
+            if (isAnswered) return;
+            const idStr = String(optId);
+            setEliminatedOpts(prev => {
+              const exists = prev.includes(idStr);
+              if (!exists && String(selectedOpt || '') === idStr) setSelectedOpt(null);
+              return exists ? prev.filter(x => x !== idStr) : [...prev, idStr];
+            });
+          };
+
+          const handleRichImgClick = (e) => {
+            const target = e.target;
+            if (target && String(target.tagName || '').toUpperCase() === 'IMG' && target.src) {
+              e.stopPropagation();
+              setImageViewer({ src: target.src, alt: target.alt || 'Imagem da questão' });
+            }
+          };
+
+          const modalEl = (
+            <div
+              className="fixed inset-0 z-[270000] bg-black/95 sm:bg-black/85 sm:backdrop-blur-md hz-touch-noblur flex items-center justify-center p-0 sm:p-3 md:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Questões da aula: ${video?.title || ''}`}
+              data-hz-portal-modal="aulas-quiz"
+            >
+              <div
+                className={`w-full max-w-4xl hz-modal-h rounded-none sm:rounded-3xl border flex flex-col overflow-hidden shadow-2xl ${
+                  isDark ? 'bg-[#121216] border-white/10 text-white' : 'bg-[#F4F1EA] border-gray-200 text-gray-900'
+                }`}
+              >
+                {/* Header */}
+                <div
+                  className={`px-3 sm:px-5 py-2.5 sm:py-3.5 border-b flex items-center justify-between gap-2 shrink-0 ${
+                    isDark ? 'bg-[#18181d] border-white/10' : 'bg-white border-gray-200'
+                  }`}
+                  style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), var(--hfoqo-safe-top, 0px), 10px)' }}
+                >
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className={`px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shrink-0 transition-colors ${
+                        isDark ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                      }`}
+                    >
+                      <Icons.ChevronLeft /> <span className="hidden sm:inline">Voltar ao vídeo</span><span className="sm:hidden">Vídeo</span>
+                    </button>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/35">
+                          Questões da Aula
+                        </span>
+                        <span className={`text-[10px] font-semibold hidden sm:inline ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Isolado · não altera Trilha/Desafio
+                        </span>
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold truncate mt-0.5">{video?.title || 'Aula selecionada'}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    {total > 0 && (
+                      <div className={`px-2.5 py-1 rounded-full text-[11px] font-black border ${
+                        allAnswered
+                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/35'
+                          : (isDark ? 'bg-white/5 text-gray-200 border-white/10' : 'bg-gray-100 text-gray-800 border-gray-200')
+                      }`}>
+                        {answeredCount}/{total} · ✓{correctCount} ✗{wrongCount}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Fechar questões da aula"
+                      className={`min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors ${
+                        isDark ? 'bg-white/10 hover:bg-red-500/30 text-gray-200' : 'bg-gray-100 hover:bg-red-100 text-gray-700'
+                      }`}
+                    >
+                      <Icons.X />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Strip numérica rápida das questões */}
+                {total > 0 && (
+                  <div className={`px-3 sm:px-5 py-2 border-b flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 ${
+                    isDark ? 'bg-[#15151a] border-white/10' : 'bg-[#EAE5D9]/70 border-black/10'
+                  }`}>
+                    {activeList.map((q, idx) => {
+                      const ans = savedAnswers[String(q.id)];
+                      const isCur = !showSummary && idx === safeIdx;
+                      return (
+                        <button
+                          key={String(q.id)}
+                          type="button"
+                          onClick={() => { setShowSummary(false); setCurrentIdx(idx); }}
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[11px] font-black shrink-0 transition-all border ${
+                            isCur
+                              ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-500/40'
+                              : ans
+                                ? (ans.correct
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                                  : 'bg-red-500/20 text-red-400 border-red-500/40')
+                                : (isDark ? 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50')
+                          }`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                    {answeredCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowSummary(v => !v)}
+                        className={`ml-auto px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 border transition-colors ${
+                          showSummary
+                            ? 'bg-emerald-600 text-white border-emerald-500'
+                            : (isDark ? 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10' : 'bg-white text-gray-700 border-gray-300')
+                        }`}
+                      >
+                        {showSummary ? 'Ver questões' : 'Resumo'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Conteúdo Principal */}
+                <div ref={bodyScrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-6">
+                  {total === 0 ? (
+                    <div className={`max-w-lg mx-auto my-8 rounded-3xl p-6 sm:p-8 border text-center space-y-4 ${
+                      isDark ? 'bg-[#18181f] border-white/10' : 'bg-white border-gray-200 shadow-sm'
+                    }`}>
+                      <div className="text-4xl">📚</div>
+                      <h3 className="text-lg sm:text-xl font-black">Nenhuma questão encontrada para este tema ainda</h3>
+                      <p className={`text-xs sm:text-sm leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Ainda não há questões no banco com as tags/tema de <strong>{video?.title}</strong>. Assim que você cadastrar novas questões ou atualizar o banco, até 15 questões aparecerão automaticamente aqui!
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2.5 justify-center pt-2">
+                        {Array.isArray(fallbackQuestions) && fallbackQuestions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setUseFallback(true); setCurrentIdx(0); setShowSummary(false); }}
+                            className="px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs sm:text-sm font-black transition-colors"
+                          >
+                            Praticar com questões de {video?.folderName || video?.specialtyName} ({Math.min(AULAS_VIDEO_QUIZ_TARGET, fallbackQuestions.length)})
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className={`px-4 py-3 rounded-xl text-xs sm:text-sm font-bold border ${
+                            isDark ? 'bg-white/5 border-white/15 text-gray-200 hover:bg-white/10' : 'bg-gray-100 border-gray-200 text-gray-800'
+                          }`}
+                        >
+                          ← Voltar para a aula
+                        </button>
+                      </div>
+                    </div>
+                  ) : showSummary ? (
+                    <div className="max-w-2xl mx-auto space-y-5">
+                      <div className={`rounded-3xl p-6 sm:p-8 border text-center ${
+                        allAnswered
+                          ? (isDark ? 'bg-gradient-to-b from-emerald-950/35 to-[#18181f] border-emerald-500/40' : 'bg-emerald-50/70 border-emerald-300')
+                          : (isDark ? 'bg-[#18181f] border-white/10' : 'bg-white border-gray-200 shadow-sm')
+                      }`}>
+                        <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center text-2xl mb-3 ${
+                          allAnswered ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-purple-600/20 text-purple-400'
+                        }`}>
+                          {allAnswered ? '✓' : '📝'}
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-black">
+                          {allAnswered ? 'Questões da aula concluídas!' : 'Resumo parcial desta aula'}
+                        </h3>
+                        <p className={`text-xs sm:text-sm mt-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          Desempenho salvo exclusivamente na Imersão (não altera Trilha nem Desafio Diário).
+                        </p>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5">
+                          <div className={`p-3 rounded-2xl border ${isDark ? 'bg-black/25 border-white/10' : 'bg-white border-gray-200'}`}>
+                            <div className="text-[10px] font-bold uppercase text-gray-400">Feitas</div>
+                            <div className="text-xl font-black mt-0.5">{answeredCount}/{total}</div>
+                          </div>
+                          <div className={`p-3 rounded-2xl border ${isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
+                            <div className="text-[10px] font-bold uppercase text-emerald-400">Acertos</div>
+                            <div className="text-xl font-black text-emerald-500 mt-0.5">{correctCount}</div>
+                          </div>
+                          <div className={`p-3 rounded-2xl border ${isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'}`}>
+                            <div className="text-[10px] font-bold uppercase text-red-400">Erros</div>
+                            <div className="text-xl font-black text-red-500 mt-0.5">{wrongCount}</div>
+                          </div>
+                          <div className={`p-3 rounded-2xl border ${isDark ? 'bg-purple-500/10 border-purple-500/30' : 'bg-purple-50 border-purple-200'}`}>
+                            <div className="text-[10px] font-bold uppercase text-purple-400">Aproveitamento</div>
+                            <div className="text-xl font-black text-purple-400 mt-0.5">{accuracy}%</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs sm:text-sm font-black transition-colors"
+                          >
+                            ← Voltar ao vídeo
+                          </button>
+                          {allAnswered && !videoCompleted && typeof onMarkVideoCompleted === 'function' && (
+                            <button
+                              type="button"
+                              onClick={() => { onMarkVideoCompleted(video); onClose?.(); }}
+                              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-black transition-colors"
+                            >
+                              ✓ Concluir vídeo também
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('Resetar as respostas das questões desta videoaula para refazer?')) {
+                                onResetQuiz?.(video.id);
+                                setShowSummary(false);
+                                setCurrentIdx(0);
+                                setSelectedOpt(null);
+                              }
+                            }}
+                            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold border transition-colors ${
+                              isDark ? 'bg-white/5 border-white/15 text-gray-200 hover:bg-white/10' : 'bg-white border-gray-300 text-gray-800 hover:bg-gray-50'
+                            }`}
+                          >
+                            ↻ Refazer questões
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className={`rounded-3xl p-4 sm:p-5 border ${isDark ? 'bg-[#18181f] border-white/10' : 'bg-white border-gray-200'}`}>
+                        <div className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">Revisar questões desta aula</div>
+                        <div className="space-y-2">
+                          {activeList.map((q, idx) => {
+                            const a = savedAnswers[String(q.id)];
+                            return (
+                              <button
+                                key={String(q.id)}
+                                type="button"
+                                onClick={() => { setShowSummary(false); setCurrentIdx(idx); }}
+                                className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-colors ${
+                                  isDark ? 'bg-black/25 border-white/10 hover:border-purple-400/50' : 'bg-gray-50 border-gray-200 hover:border-purple-400'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-bold truncate">
+                                    Questão {String(idx + 1).padStart(2, '0')} · {q.subtema || q.temaGeral || 'Questão'}
+                                  </div>
+                                  <div className="text-[11px] text-gray-400 truncate mt-0.5">
+                                    {q.instituicao || ''}{q.ano ? ` · ${q.ano}` : ''}
+                                  </div>
+                                </div>
+                                <span className={`px-2.5 py-1 rounded-full text-[11px] font-black shrink-0 ${
+                                  !a
+                                    ? 'bg-gray-500/20 text-gray-400'
+                                    : a.correct
+                                      ? 'bg-emerald-500/15 text-emerald-400'
+                                      : 'bg-red-500/15 text-red-400'
+                                }`}>
+                                  {!a ? 'Pendente' : a.correct ? `✓ Acertou (${a.selected})` : `✗ Errou (${a.selected})`}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : qData ? (
+                    <div className={`max-w-3xl mx-auto rounded-3xl p-4 sm:p-6 border ${
+                      isDark ? 'bg-[#161616] border-white/10 text-gray-200' : 'bg-[#EAE5D9] border-black/10 text-[#2C2C2C]'
+                    }`}>
+                      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                        <span className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-400">
+                          Questão {safeIdx + 1} de {total}
+                        </span>
+                        {qData.especialidade && (
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400">
+                            {qData.especialidade}
+                          </span>
+                        )}
+                        {(qData.subtema || qData.temaGeral) && (
+                          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 break-words">
+                            {qData.temaGeral || qData.subtema}
+                          </span>
+                        )}
+                        {(qData.instituicao || qData.ano) && (
+                          <span className="text-[11px] text-gray-500 ml-auto">
+                            {qData.instituicao || ''}{qData.ano ? ` · ${qData.ano}` : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        onClick={handleRichImgClick}
+                        className="hfoqo-question-stem text-[15px] sm:text-[16px] leading-relaxed mb-5 font-medium min-w-0 max-w-full break-words"
+                        dangerouslySetInnerHTML={{ __html: cleanLiveHtml(qData.enunciado, Number(qData.richStyleVersion || 0) < 2) }}
+                      />
+
+                      <div className="space-y-2.5">
+                        {(qData.opcoes || []).map(opt => {
+                          const isElim = eliminatedOpts.includes(String(opt.id));
+                          const isSel = String(selectedOpt || '') === String(opt.id);
+                          let btnStyle = isDark ? 'bg-[#1E1E1E]' : 'bg-[#DCD8C8]';
+                          let borderStyle = 'border-2 border-transparent';
+                          let textStyle = isDark ? 'text-gray-300' : 'text-gray-800';
+                          let badge = (
+                            <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center font-black text-xs sm:text-sm ${
+                              isSel ? 'bg-purple-600 text-white' : (isDark ? 'bg-white/[0.06] text-gray-300' : 'bg-black/[0.06] text-gray-700')
+                            }`}>{opt.id}</span>
+                          );
+                          if (isAnswered) {
+                            if (opt.correta) {
+                              btnStyle = 'bg-[#122A1A]/60';
+                              borderStyle = 'border-2 border-green-500';
+                              textStyle = 'text-green-500';
+                              badge = <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500 rounded-xl flex items-center justify-center text-white"><Icons.Check /></div>;
+                            } else if (isSel && !opt.correta) {
+                              btnStyle = 'bg-[#3A1414]/60';
+                              borderStyle = 'border-2 border-red-500';
+                              textStyle = 'text-red-500';
+                              badge = <div className="w-7 h-7 sm:w-8 sm:h-8 bg-red-500 rounded-xl flex items-center justify-center text-white"><Icons.X /></div>;
+                            }
+                          } else if (isSel) {
+                            btnStyle = isDark ? 'bg-purple-500/15' : 'bg-purple-500/10';
+                            borderStyle = 'border-2 border-purple-500 ring-2 ring-purple-500/20';
+                          }
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              disabled={isAnswered}
+                              onClick={() => {
+                                if (isAnswered) return;
+                                if (isElim) setEliminatedOpts(prev => prev.filter(x => x !== String(opt.id)));
+                                setSelectedOpt(opt.id);
+                              }}
+                              className={`hfoqo-option-btn w-full flex items-center gap-2.5 sm:gap-3 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-left transition-all ${btnStyle} ${borderStyle} ${isElim && !isAnswered ? 'opacity-40' : ''}`}
+                            >
+                              <div className={`shrink-0 flex items-center justify-center ${textStyle}`}>{badge}</div>
+                              <span
+                                className={`hfoqo-option-content flex-1 min-w-0 break-words [overflow-wrap:anywhere] text-[14px] sm:text-[15px] leading-snug font-medium ${isElim ? 'line-through decoration-2 hfoqo-option-eliminated' : ''} ${isAnswered && (opt.correta || isSel) ? textStyle : ''}`}
+                                dangerouslySetInnerHTML={{ __html: cleanAlternativeHtml(opt.texto, Number(qData.richStyleVersion || 0) < 2) }}
+                              />
+                              {!isAnswered && (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  title={isElim ? 'Restaurar alternativa' : 'Eliminar alternativa'}
+                                  onClick={(e) => toggleEliminate(opt.id, e)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleEliminate(opt.id, e); }}
+                                  className={`ml-1 w-8 h-8 rounded-xl shrink-0 flex items-center justify-center ${
+                                    isElim ? 'bg-red-500/20 text-red-400 border border-red-500/30' : (isDark ? 'text-gray-500 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-900 hover:bg-black/10')
+                                  }`}
+                                >
+                                  ✂
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {isAnswered && (
+                        <div className={`mt-5 p-4 sm:p-5 rounded-2xl ${isDark ? 'bg-[#1E1E1E]' : 'bg-[#DCD8C8]'}`}>
+                          <div className={`flex items-center gap-2 mb-3 font-bold text-sm sm:text-base ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                            <Icons.GraduationCap /> Comentário do professor
+                          </div>
+                          <div
+                            onClick={handleRichImgClick}
+                            className={`hfoqo-question-stem min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[14px] sm:text-[15px] leading-relaxed ${isDark ? 'text-gray-300' : 'text-gray-700'}`}
+                            dangerouslySetInnerHTML={{ __html: formatQuestionCommentarySections(qData.comentario || 'Comentário do professor não cadastrado para esta questão.', isDark, Number(qData.richStyleVersion || 0) < 2) }}
+                          />
+                        </div>
+                      )}
+
+                      {isAnswered && qData.videoUrl && getVimeoEmbedUrlClient(qData.videoUrl) && (
+                        <section className={`mt-4 overflow-hidden rounded-2xl border ${isDark ? 'bg-[#171717] border-[#3B2A58]' : 'bg-white border-purple-200'}`}>
+                          <div className="flex items-center justify-between gap-3 p-3.5">
+                            <div className="min-w-0"><div className="font-black text-sm">🎥 Vídeo da questão</div></div>
+                            <a href={qData.videoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-bold">Abrir no Vimeo ↗</a>
+                          </div>
+                          <div className="aspect-video w-full bg-black">
+                            <iframe src={getVimeoEmbedUrlClient(qData.videoUrl)} title="Vídeo da questão" className="w-full h-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen loading="lazy" />
+                          </div>
+                        </section>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Rodapé fixo de ações */}
+                {total > 0 && !showSummary && (
+                  <div
+                    className={`px-3 sm:px-5 py-2.5 sm:py-3 border-t flex items-center justify-between gap-2 shrink-0 ${
+                      isDark ? 'bg-[#18181d] border-white/10' : 'bg-white border-gray-200'
+                    }`}
+                    style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom, 0px))' }}
+                  >
+                    <button
+                      type="button"
+                      disabled={safeIdx === 0}
+                      onClick={() => setCurrentIdx(Math.max(0, safeIdx - 1))}
+                      className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold disabled:opacity-35 transition-colors ${
+                        isDark ? 'bg-white/10 hover:bg-white/15 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                      }`}
+                    >
+                      ← Anterior
+                    </button>
+
+                    {!isAnswered ? (
+                      <button
+                        type="button"
+                        disabled={!selectedOpt}
+                        onClick={handleConfirm}
+                        className={`flex-1 sm:flex-none sm:min-w-[220px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all ${
+                          selectedOpt
+                            ? 'bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white shadow-lg shadow-purple-600/30'
+                            : (isDark ? 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed' : 'bg-gray-200 text-gray-500 cursor-not-allowed')
+                        }`}
+                      >
+                        {selectedOpt ? `✓ Confirmar · ${selectedOpt}` : 'Selecione uma alternativa'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleNextOrFinish}
+                        className="flex-1 sm:flex-none sm:min-w-[220px] px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-black shadow-lg shadow-emerald-500/25 transition-colors"
+                      >
+                        {safeIdx < total - 1 ? 'Próxima questão →' : '✓ Concluir e ver resultado'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {imageViewer && (
+                <div
+                  className="fixed inset-0 z-[280000] bg-black/95 flex items-center justify-center p-3 cursor-zoom-out overflow-auto"
+                  onClick={() => setImageViewer(null)}
+                  role="button"
+                  aria-label="Fechar imagem"
+                >
+                  <img
+                    src={imageViewer.src}
+                    alt={imageViewer.alt}
+                    onClick={(e) => e.stopPropagation()}
+                    draggable="false"
+                    style={{ touchAction: 'pinch-zoom' }}
+                    className="max-w-[98vw] max-h-[92dvh] w-auto h-auto object-contain rounded-xl shadow-2xl select-none"
+                  />
+                </div>
+              )}
+            </div>
+          );
+
+          return typeof createPortal === 'function' ? createPortal(modalEl, document.body) : modalEl;
+        };
+
         const App = () => {
           // Autenticação verificada diretamente no servidor (sem confiar apenas em flags locais nem expor senha no frontend).
           const [activeAccess, setActiveAccess] = useState('');
@@ -3782,6 +5047,7 @@
             const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
             const videosIn = src.videos && typeof src.videos === 'object' && !Array.isArray(src.videos) ? src.videos : {};
             const pdfsIn = src.pdfs && typeof src.pdfs === 'object' && !Array.isArray(src.pdfs) ? src.pdfs : {};
+            const quizzesIn = src.quizzes && typeof src.quizzes === 'object' && !Array.isArray(src.quizzes) ? src.quizzes : {};
             const videos = {};
             Object.keys(videosIn).forEach((vid) => {
               const item = videosIn[vid];
@@ -3812,6 +5078,50 @@
                 pdfs[String(pid)] = { openedAt, highlights, highlightsUpdatedAt };
               }
             });
+            const quizzes = {};
+            Object.keys(quizzesIn).forEach((vid) => {
+              const item = quizzesIn[vid];
+              if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+              const questionIds = Array.isArray(item.questionIds)
+                ? Array.from(new Set(item.questionIds.map(x => String(x || '').trim()).filter(Boolean))).slice(0, 60)
+                : [];
+              const rawAnswers = item.answers && typeof item.answers === 'object' && !Array.isArray(item.answers) ? item.answers : {};
+              const answers = {};
+              let answeredCount = 0;
+              let correctCount = 0;
+              Object.keys(rawAnswers).forEach((qid) => {
+                const a = rawAnswers[qid];
+                if (!a || typeof a !== 'object') return;
+                const sel = String(a.selected || '').trim().toUpperCase();
+                if (!sel) return;
+                const corr = Boolean(a.correct);
+                answers[String(qid)] = {
+                  selected: sel,
+                  correct: corr,
+                  answeredAt: String(a.answeredAt || '')
+                };
+                answeredCount++;
+                if (corr) correctCount++;
+              });
+              if (!questionIds.length && answeredCount === 0) return;
+              const totalQuestions = Math.max(questionIds.length, answeredCount, Math.floor(Number(item.totalQuestions) || 0));
+              const completed = Boolean(item.completed || (totalQuestions > 0 && answeredCount >= totalQuestions));
+              quizzes[String(vid)] = {
+                questionIds,
+                answers,
+                totalQuestions,
+                answeredCount,
+                correctCount,
+                completed,
+                updatedAt: String(item.updatedAt || item.completedAt || ''),
+                completedAt: completed ? String(item.completedAt || item.updatedAt || '') : '',
+                videoTitle: String(item.videoTitle || ''),
+                folderId: String(item.folderId || ''),
+                folderName: String(item.folderName || ''),
+                specialtyId: String(item.specialtyId || ''),
+                specialtyName: String(item.specialtyName || '')
+              };
+            });
             const lastIn = src.lastOpened && typeof src.lastOpened === 'object' ? src.lastOpened : null;
             const lastOpened = lastIn && lastIn.videoId ? {
               specialtyId: String(lastIn.specialtyId || ''),
@@ -3822,7 +5132,7 @@
               specialtyName: String(lastIn.specialtyName || ''),
               updatedAt: String(lastIn.updatedAt || '')
             } : null;
-            return { videos, pdfs, lastOpened };
+            return { videos, pdfs, quizzes, lastOpened };
           }
 
           function mergeAulasProgress(localRaw, remoteRaw) {
@@ -3858,6 +5168,18 @@
                 highlightsUpdatedAt: chosenHl.highlightsUpdatedAt || pa.highlightsUpdatedAt || pb.highlightsUpdatedAt || ''
               };
             });
+            const quizzes = { ...a.quizzes };
+            Object.keys(b.quizzes || {}).forEach((vid) => {
+              const cur = quizzes[vid];
+              const inc = b.quizzes[vid];
+              if (!cur) { quizzes[vid] = inc; return; }
+              const ta = Date.parse(cur.updatedAt || '') || 0;
+              const tb = Date.parse(inc.updatedAt || '') || 0;
+              if (tb > ta) quizzes[vid] = inc;
+              else if (tb === ta && ((inc.answeredCount > cur.answeredCount) || (inc.completed && !cur.completed))) {
+                quizzes[vid] = inc;
+              }
+            });
             const lastA = a.lastOpened;
             const lastB = b.lastOpened;
             let lastOpened = lastA || lastB || null;
@@ -3866,7 +5188,7 @@
               const tb = Date.parse(lastB.updatedAt || '') || 0;
               lastOpened = tb >= ta ? lastB : lastA;
             }
-            return { videos, pdfs, lastOpened };
+            return { videos, pdfs, quizzes, lastOpened };
           }
 
           const [aulasCatalog, setAulasCatalog] = useState(() => {
@@ -4148,6 +5470,75 @@
                     highlightsUpdatedAt: now
                   }
                 }
+              };
+            });
+          };
+
+          // Sistema 100% isolado de questões por videoaula da Imersão (não altera Trilha/Desafio/Limbo/Métricas gerais)
+          const recordAulasQuizAnswer = (video, questionIds, qid, selectedOpt, isCorrect) => {
+            if (!video || !video.id || !qid) return;
+            const vid = String(video.id);
+            const qKey = String(qid);
+            const sel = String(selectedOpt || '').trim().toUpperCase();
+            if (!sel) return;
+            const now = new Date().toISOString();
+            const normalizedIds = Array.isArray(questionIds)
+              ? Array.from(new Set(questionIds.map(x => String(x || '').trim()).filter(Boolean)))
+              : [qKey];
+            setAulasProgress(prev => {
+              const base = normalizeAulasProgress(prev);
+              const existing = base.quizzes?.[vid];
+              const nextQuestionIds = (existing && Array.isArray(existing.questionIds) && existing.questionIds.length > 0)
+                ? existing.questionIds
+                : (normalizedIds.includes(qKey) ? normalizedIds : [...normalizedIds, qKey]);
+              const nextAnswers = {
+                ...(existing?.answers || {}),
+                [qKey]: {
+                  selected: sel,
+                  correct: Boolean(isCorrect),
+                  answeredAt: now
+                }
+              };
+              const answerVals = Object.values(nextAnswers);
+              const answeredCount = answerVals.length;
+              const correctCount = answerVals.filter(a => a && a.correct).length;
+              const totalQuestions = Math.max(nextQuestionIds.length, answeredCount);
+              const completed = totalQuestions > 0 && answeredCount >= totalQuestions;
+              return {
+                ...base,
+                quizzes: {
+                  ...(base.quizzes || {}),
+                  [vid]: {
+                    questionIds: nextQuestionIds,
+                    answers: nextAnswers,
+                    totalQuestions,
+                    answeredCount,
+                    correctCount,
+                    completed,
+                    updatedAt: now,
+                    completedAt: completed ? (existing?.completedAt || now) : '',
+                    videoTitle: String(video.title || existing?.videoTitle || ''),
+                    folderId: String(video.folderId || existing?.folderId || ''),
+                    folderName: String(video.folderName || existing?.folderName || ''),
+                    specialtyId: String(video.specialtyId || existing?.specialtyId || ''),
+                    specialtyName: String(video.specialtyName || existing?.specialtyName || '')
+                  }
+                }
+              };
+            });
+          };
+
+          const resetAulasVideoQuiz = (videoId) => {
+            const vid = String(videoId || '').trim();
+            if (!vid) return;
+            setAulasProgress(prev => {
+              const base = normalizeAulasProgress(prev);
+              if (!base.quizzes || !base.quizzes[vid]) return base;
+              const nextQuizzes = { ...base.quizzes };
+              delete nextQuizzes[vid];
+              return {
+                ...base,
+                quizzes: nextQuizzes
               };
             });
           };
@@ -6279,7 +7670,7 @@
                 if (scope === 'aulas_videos' && /não reconhecido|nao reconhecido/i.test(errMsg)) {
                   const resetAt = new Date().toISOString();
                   const preservedPdfs = normalizeAulasProgress(aulasProgress).pdfs;
-                  const clearedAulas = normalizeAulasProgress({ videos: {}, pdfs: preservedPdfs, lastOpened: null });
+                  const clearedAulas = normalizeAulasProgress({ videos: {}, pdfs: preservedPdfs, quizzes: {}, lastOpened: null });
                   const snapshot = buildCloudSyncSnapshot();
                   snapshot.aulasVideosResetAt = resetAt;
                   snapshot.storage = {
@@ -6363,6 +7754,7 @@
                 const clearedAulas = normalizeAulasProgress({
                   videos: {},
                   pdfs: normalizeAulasProgress(aulasProgress).pdfs,
+                  quizzes: {},
                   lastOpened: null
                 });
                 try {
@@ -9677,7 +11069,7 @@
           };
 
           const AulasView = () => {
-            const [subTab, setSubTab] = useState('playlists'); // 'playlists' | 'watching' | 'pdfs'
+            const [subTab, setSubTab] = useState('playlists'); // 'evolucao' | 'playlists' | 'watching' | 'pdfs'
             const [selectedSpecialtyId, setSelectedSpecialtyId] = useState('');
             const [selectedFolderId, setSelectedFolderId] = useState('');
             const [folderDropdownOpen, setFolderDropdownOpen] = useState(false);
@@ -9689,7 +11081,9 @@
             const [displayMode, setDisplayMode] = useState('trilha'); // 'trilha' | 'lista'
             const [pdfSearch, setPdfSearch] = useState('');
             const [activeVideoSession, setActiveVideoSession] = useState(null); // { videos, index, sourceLabel }
+            const [activeVideoQuiz, setActiveVideoQuiz] = useState(null); // { video, questionIds, fallbackIds }
             const [activePdfModal, setActivePdfModal] = useState(null); // { id, title, subtitle }
+            const [expandedEvolutionSpecs, setExpandedEvolutionSpecs] = useState({});
             const [playerMode, setPlayerMode] = useState(() => {
               try { return localStorage.getItem('hfoqo_aulas_player_mode_v3') === 'native' ? 'native' : 'drive'; }
               catch { return 'drive'; }
@@ -9717,6 +11111,7 @@
 
             useEffect(() => {
               if (!activeVideoSession) {
+                setActiveVideoQuiz(null);
                 setMobilePlayerTab('controls');
                 setMobileVideoTall(false);
               }
@@ -9726,8 +11121,83 @@
             const globalPdfs = Array.isArray(aulasCatalog?.globalPdfs) ? aulasCatalog.globalPdfs : [];
             const videoMap = aulasProgress?.videos || {};
             const pdfMap = aulasProgress?.pdfs || {};
+            const aulasQuizMap = aulasProgress?.quizzes || {};
+
+            const aulasQuestionIndex = useMemo(
+              () => buildAulasQuestionIndex(allLiveQuestions),
+              [allLiveQuestions]
+            );
+            const aulasQuestionById = useMemo(() => {
+              const map = new Map();
+              (Array.isArray(allLiveQuestions) ? allLiveQuestions : []).forEach(q => {
+                if (q && q.id != null) map.set(String(q.id), q);
+              });
+              return map;
+            }, [allLiveQuestions]);
+
+            const aulasVideoMatchMap = useMemo(() => {
+              const out = {};
+              specialties.forEach(sp => {
+                (sp.folders || []).forEach(folder => {
+                  (folder.videos || []).forEach(v => {
+                    if (!v || !v.id) return;
+                    const enriched = {
+                      ...v,
+                      folderId: folder.id,
+                      folderName: folder.name,
+                      specialtyId: sp.id,
+                      specialtyName: sp.name
+                    };
+                    const res = matchQuestionsForAulasVideo(enriched, aulasQuestionIndex, { limit: AULAS_VIDEO_QUIZ_TARGET });
+                    out[String(v.id)] = {
+                      ids: res.ids,
+                      totalMatched: res.totalMatched,
+                      matchLevel: res.matchLevel
+                    };
+                  });
+                });
+              });
+              return out;
+            }, [specialties, aulasQuestionIndex]);
 
             const getVideoStatus = (videoId) => videoMap[String(videoId)]?.status || 'not_started';
+
+            const getVideoQuizSummary = (videoId) => {
+              const vid = String(videoId || '');
+              const saved = aulasQuizMap[vid] || null;
+              const match = aulasVideoMatchMap[vid] || { ids: [], totalMatched: 0, matchLevel: 'none' };
+              const liveIds = match.ids || [];
+              const savedIds = (saved && Array.isArray(saved.questionIds) && saved.questionIds.length > 0) ? saved.questionIds : null;
+              const total = savedIds ? savedIds.length : liveIds.length;
+              const answered = saved ? Math.min(total || saved.answeredCount || 0, Number(saved.answeredCount || 0)) : 0;
+              const correct = saved ? Math.min(answered, Number(saved.correctCount || 0)) : 0;
+              const completed = Boolean(saved && (saved.completed || (total > 0 && answered >= total)));
+              return { total, answered, correct, completed, remaining: Math.max(0, total - answered), saved, match };
+            };
+
+            const openVideoQuizModal = (video) => {
+              if (!video || !video.id) return;
+              const vid = String(video.id);
+              const saved = aulasQuizMap[vid] || null;
+              let ids = [];
+              if (saved && Array.isArray(saved.questionIds) && saved.questionIds.length > 0) {
+                ids = saved.questionIds.filter(id => aulasQuestionById.has(String(id)));
+              }
+              if (!ids.length) {
+                const match = aulasVideoMatchMap[vid] || matchQuestionsForAulasVideo(video, aulasQuestionIndex, { limit: AULAS_VIDEO_QUIZ_TARGET });
+                ids = (match.ids || []).filter(id => aulasQuestionById.has(String(id)));
+              }
+              let fallbackIds = [];
+              if (!ids.length) {
+                const fb = matchQuestionsForAulasVideo(
+                  { id: `${vid}_fb`, title: video.folderName || video.specialtyName || '', folderName: video.folderName, specialtyName: video.specialtyName },
+                  aulasQuestionIndex,
+                  { limit: AULAS_VIDEO_QUIZ_TARGET, fallbackToFolder: true }
+                );
+                fallbackIds = (fb.ids || []).filter(id => aulasQuestionById.has(String(id)));
+              }
+              setActiveVideoQuiz({ video, questionIds: ids, fallbackIds });
+            };
 
             const getPlaylistResumeTarget = (items) => {
               const list = Array.isArray(items) ? items : [];
@@ -9859,13 +11329,14 @@
             useEffect(() => {
               const onKeyDown = (e) => {
                 if (e.key !== 'Escape') return;
+                if (activeVideoQuiz) { setActiveVideoQuiz(null); return; }
                 if (activePdfModal) { setActivePdfModal(null); return; }
                 if (activeVideoSession) { setActiveVideoSession(null); return; }
                 if (folderDropdownOpen) setFolderDropdownOpen(false);
               };
               window.addEventListener('keydown', onKeyDown);
               return () => window.removeEventListener('keydown', onKeyDown);
-            }, [activePdfModal, activeVideoSession, folderDropdownOpen]);
+            }, [activeVideoQuiz, activePdfModal, activeVideoSession, folderDropdownOpen]);
 
             const openSpecialty = (sp) => {
               if (!sp) return;
@@ -9965,6 +11436,147 @@
               return { total, completed, watching, pdfCount };
             }, [specialties, globalPdfs, aulasProgress]);
 
+            const aulasEvolution = useMemo(() => {
+              let totalVideos = 0;
+              let completedVideos = 0;
+              let watchingVideos = 0;
+              let totalQuestions = 0;
+              let answeredQuestions = 0;
+              let correctQuestions = 0;
+              let completedQuizVideos = 0;
+              let videosWithQuestions = 0;
+
+              let lastResumeTarget = null;
+              const lastOpenedId = String(aulasProgress?.lastOpened?.videoId || '');
+              let bestWatchingCandidate = null;
+              let bestWatchingStamp = -1;
+              let firstUnwatchedCandidate = null;
+
+              const spList = specialties.map(sp => {
+                let spVideos = 0, spDone = 0, spWatch = 0;
+                let spQTotal = 0, spQAnswered = 0, spQCorrect = 0, spQuizDone = 0, spVideosWithQ = 0;
+                const spAllVids = [];
+
+                const folders = (sp.folders || []).map(folder => {
+                  const vids = Array.isArray(folder.videos) ? folder.videos : [];
+                  let fDone = 0, fWatch = 0, fQTotal = 0, fQAnswered = 0, fQCorrect = 0, fQuizDone = 0, fVideosWithQ = 0;
+
+                  vids.forEach((v, vIdx) => {
+                    spAllVids.push(v);
+                    const vst = getVideoStatus(v.id);
+                    if (vst === 'completed') fDone++;
+                    else if (vst === 'watching') fWatch++;
+
+                    const qs = getVideoQuizSummary(v.id);
+                    if (qs.total > 0) fVideosWithQ++;
+                    if (qs.completed && qs.total > 0) fQuizDone++;
+                    fQTotal += qs.total;
+                    fQAnswered += qs.answered;
+                    fQCorrect += qs.correct;
+
+                    const vidStr = String(v.id || '');
+                    const candidate = { sp, folder, video: v, order: vIdx + 1, totalInFolder: vids.length };
+                    if (lastOpenedId && vidStr === lastOpenedId && vst !== 'completed') {
+                      lastResumeTarget = candidate;
+                    }
+                    if (vst === 'watching') {
+                      const stp = Date.parse(videoMap[vidStr]?.updatedAt || '') || 0;
+                      if (!bestWatchingCandidate || stp > bestWatchingStamp) {
+                        bestWatchingCandidate = candidate;
+                        bestWatchingStamp = stp;
+                      }
+                    }
+                    if (vst === 'not_started' && !firstUnwatchedCandidate) {
+                      firstUnwatchedCandidate = candidate;
+                    }
+                  });
+
+                  const fPending = Math.max(0, vids.length - fDone);
+                  const fQRemaining = Math.max(0, fQTotal - fQAnswered);
+                  const fResume = getPlaylistResumeTarget(vids);
+
+                  spVideos += vids.length;
+                  spDone += fDone;
+                  spWatch += fWatch;
+                  spQTotal += fQTotal;
+                  spQAnswered += fQAnswered;
+                  spQCorrect += fQCorrect;
+                  spQuizDone += fQuizDone;
+                  spVideosWithQ += fVideosWithQ;
+
+                  return {
+                    folder,
+                    totalVideos: vids.length,
+                    completedVideos: fDone,
+                    watchingVideos: fWatch,
+                    pendingVideos: fPending,
+                    totalQuestions: fQTotal,
+                    answeredQuestions: fQAnswered,
+                    remainingQuestions: fQRemaining,
+                    correctQuestions: fQCorrect,
+                    completedQuizVideos: fQuizDone,
+                    videosWithQuestions: fVideosWithQ,
+                    accuracyPct: fQAnswered > 0 ? Math.round((fQCorrect / fQAnswered) * 100) : 0,
+                    resumeTarget: fResume
+                  };
+                });
+
+                totalVideos += spVideos;
+                completedVideos += spDone;
+                watchingVideos += spWatch;
+                totalQuestions += spQTotal;
+                answeredQuestions += spQAnswered;
+                correctQuestions += spQCorrect;
+                completedQuizVideos += spQuizDone;
+                videosWithQuestions += spVideosWithQ;
+
+                return {
+                  sp,
+                  folders,
+                  totalVideos: spVideos,
+                  completedVideos: spDone,
+                  watchingVideos: spWatch,
+                  pendingVideos: Math.max(0, spVideos - spDone),
+                  totalQuestions: spQTotal,
+                  answeredQuestions: spQAnswered,
+                  remainingQuestions: Math.max(0, spQTotal - spQAnswered),
+                  correctQuestions: spQCorrect,
+                  completedQuizVideos: spQuizDone,
+                  videosWithQuestions: spVideosWithQ,
+                  accuracyPct: spQAnswered > 0 ? Math.round((spQCorrect / spQAnswered) * 100) : 0,
+                  resumeTarget: getPlaylistResumeTarget(spAllVids)
+                };
+              });
+
+              if (!lastResumeTarget) {
+                lastResumeTarget = bestWatchingCandidate || firstUnwatchedCandidate || (spList[0]?.folders[0]?.folder?.videos?.[0]
+                  ? {
+                      sp: spList[0].sp,
+                      folder: spList[0].folders[0].folder,
+                      video: spList[0].folders[0].folder.videos[0],
+                      order: 1,
+                      totalInFolder: spList[0].folders[0].totalVideos
+                    }
+                  : null);
+              }
+
+              return {
+                totalVideos,
+                completedVideos,
+                watchingVideos,
+                pendingVideos: Math.max(0, totalVideos - completedVideos),
+                totalQuestions,
+                answeredQuestions,
+                remainingQuestions: Math.max(0, totalQuestions - answeredQuestions),
+                correctQuestions,
+                completedQuizVideos,
+                videosWithQuestions,
+                accuracyPct: answeredQuestions > 0 ? Math.round((correctQuestions / answeredQuestions) * 100) : 0,
+                specialties: spList,
+                lastResumeTarget
+              };
+            }, [specialties, aulasProgress, aulasVideoMatchMap]);
+
             const watchingList = useMemo(() => {
               const out = [];
               specialties.forEach(sp => {
@@ -10046,6 +11658,8 @@
               const currentVideo = activeVideoSession?.videos?.[activeVideoSession.index] || null;
               const currentStatus = currentVideo ? getVideoStatus(currentVideo.id) : 'not_started';
               const isCompleted = currentStatus === 'completed';
+              const currentQuizSummary = currentVideo ? getVideoQuizSummary(currentVideo.id) : { total: 0, answered: 0, correct: 0, completed: false, remaining: 0 };
+              const matchedVideoPdfs = currentVideo ? matchPdfsForAulasVideo(currentVideo, [...(currentVideo.pdfs || []), ...globalPdfs]) : [];
               const hasPrev = Boolean(activeVideoSession && activeVideoSession.index > 0);
               const hasNext = Boolean(activeVideoSession && activeVideoSession.index < activeVideoSession.videos.length - 1);
 
@@ -10207,23 +11821,61 @@
                               <div className={mobilePlayerTab === 'playlist' ? 'hidden lg:block' : 'block'}>
                                 <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-2xl bg-[#1a1a21] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => updateVideoWatchState(currentVideo, isCompleted ? 'watching' : 'completed', {
-                                        force: true,
-                                        specialtyId: currentVideo.specialtyId,
-                                        specialtyName: currentVideo.specialtyName,
-                                        folderId: currentVideo.folderId,
-                                        folderName: currentVideo.folderName
-                                      })}
-                                      className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                                        isCompleted
-                                          ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.4)] hover:bg-emerald-600'
-                                          : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500 hover:text-white'
-                                      }`}
-                                    >
-                                      <Icons.Check /> {isCompleted ? 'Concluída (Verde)' : 'Marcar como Concluída'}
-                                    </button>
+                                    <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateVideoWatchState(currentVideo, isCompleted ? 'watching' : 'completed', {
+                                          force: true,
+                                          specialtyId: currentVideo.specialtyId,
+                                          specialtyName: currentVideo.specialtyName,
+                                          folderId: currentVideo.folderId,
+                                          folderName: currentVideo.folderName
+                                        })}
+                                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 transition-all ${
+                                          isCompleted
+                                            ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.4)] hover:bg-emerald-600'
+                                            : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500 hover:text-white'
+                                        }`}
+                                      >
+                                        <Icons.Check /> <span className="truncate">{isCompleted ? 'Concluída (Verde)' : 'Marcar como Concluída'}</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        data-aulas-fazer-questoes="1"
+                                        onClick={() => openVideoQuizModal(currentVideo)}
+                                        className={`px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 border transition-all ${
+                                          currentQuizSummary.completed
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/60 shadow-[0_0_14px_rgba(16,185,129,0.28)] hover:bg-emerald-500 hover:text-white'
+                                            : currentQuizSummary.answered > 0
+                                              ? 'bg-amber-400/15 text-amber-300 border-amber-400/45 hover:bg-amber-400/25'
+                                              : currentQuizSummary.total > 0
+                                                ? 'bg-indigo-600 text-white border-indigo-400/60 shadow-[0_0_14px_rgba(99,102,241,0.35)] hover:bg-indigo-500'
+                                                : 'bg-white/10 text-gray-200 border-white/15 hover:bg-white/15'
+                                        }`}
+                                        title={
+                                          currentQuizSummary.completed
+                                            ? `Questões desta aula concluídas (${currentQuizSummary.correct}/${currentQuizSummary.total} acertos)`
+                                            : 'Resolver questões filtradas automaticamente sobre o tema desta aula'
+                                        }
+                                      >
+                                        {currentQuizSummary.completed ? (
+                                          <>
+                                            <Icons.Check />
+                                            <span className="truncate">Questões concluídas</span>
+                                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/30 text-[10px] font-black shrink-0">
+                                              {currentQuizSummary.total}/{currentQuizSummary.total}
+                                            </span>
+                                          </>
+                                        ) : currentQuizSummary.answered > 0 ? (
+                                          <span className="truncate">📝 Questões ({currentQuizSummary.answered}/{currentQuizSummary.total})</span>
+                                        ) : currentQuizSummary.total > 0 ? (
+                                          <span className="truncate">📝 Fazer questões ({currentQuizSummary.total})</span>
+                                        ) : (
+                                          <span className="truncate">📝 Fazer questões</span>
+                                        )}
+                                      </button>
+                                    </div>
                                     {isCompleted && (
                                       <button
                                         type="button"
@@ -10270,14 +11922,14 @@
                                   </div>
                                 </div>
 
-                                {/* PDFs de Apoio rápidos da pasta */}
-                                {Array.isArray(currentVideo.pdfs) && currentVideo.pdfs.length > 0 && (
-                                  <div className="mt-3 sm:mt-4 p-3.5 sm:p-4 rounded-2xl bg-[#18181e] border border-white/10">
+                                {/* PDFs de Apoio filtrados especificamente pelo tema desta aula */}
+                                {matchedVideoPdfs.length > 0 && (
+                                  <div className="mt-3 sm:mt-4 p-3.5 sm:p-4 rounded-2xl bg-[#18181e] border border-white/10" data-aulas-matched-pdfs="1">
                                     <div className="text-xs font-black uppercase tracking-wider text-purple-300 mb-2.5 flex items-center gap-2">
-                                      <Icons.FileText /> Material de apoio desta pasta ({currentVideo.pdfs.length} PDF{currentVideo.pdfs.length > 1 ? 's' : ''})
+                                      <Icons.FileText /> Material de apoio desta aula ({matchedVideoPdfs.length} PDF{matchedVideoPdfs.length > 1 ? 's' : ''})
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                      {currentVideo.pdfs.map(pdf => (
+                                      {matchedVideoPdfs.map(pdf => (
                                         <button
                                           key={pdf.id}
                                           type="button"
@@ -10316,6 +11968,7 @@
                             <div ref={playerPlaylistRef} className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                               {activeVideoSession.videos.map((vid, idx) => {
                                 const st = getVideoStatus(vid.id);
+                                const qSum = getVideoQuizSummary(vid.id);
                                 const isCurrent = idx === activeVideoSession.index;
                                 return (
                                   <button
@@ -10348,9 +12001,16 @@
                                       <div className="text-xs font-bold leading-snug line-clamp-2">{vid.title}</div>
                                       <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-between gap-2">
                                         <span className="truncate">{vid.folderName || ''}{vid.theme ? ` · ${vid.theme}` : ''}</span>
-                                        <span className={st === 'completed' ? 'text-emerald-400 font-bold shrink-0' : st === 'watching' ? 'text-amber-400 font-bold shrink-0' : ''}>
-                                          {st === 'completed' ? 'Concluído' : st === 'watching' ? 'Assistindo' : ''}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {qSum.completed ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-black">✓ {qSum.total}q</span>
+                                          ) : qSum.answered > 0 ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">{qSum.answered}/{qSum.total}q</span>
+                                          ) : null}
+                                          <span className={st === 'completed' ? 'text-emerald-400 font-bold shrink-0' : st === 'watching' ? 'text-amber-400 font-bold shrink-0' : ''}>
+                                            {st === 'completed' ? 'Concluído' : st === 'watching' ? 'Assistindo' : ''}
+                                          </span>
+                                        </div>
                                       </div>
                                     </div>
                                   </button>
@@ -10366,6 +12026,27 @@
               return (
                 <>
                   {videoPlayerModalEl && (typeof createPortal === 'function' ? createPortal(videoPlayerModalEl, document.body) : videoPlayerModalEl)}
+
+                  {activeVideoQuiz?.video && (
+                    <AulasVideoQuizModal
+                      video={activeVideoQuiz.video}
+                      questions={(activeVideoQuiz.questionIds || []).map(id => aulasQuestionById.get(String(id))).filter(Boolean)}
+                      fallbackQuestions={(activeVideoQuiz.fallbackIds || []).map(id => aulasQuestionById.get(String(id))).filter(Boolean)}
+                      quizRecord={aulasQuizMap[String(activeVideoQuiz.video.id)] || null}
+                      videoCompleted={getVideoStatus(activeVideoQuiz.video.id) === 'completed'}
+                      isDark={isDark}
+                      onRecordAnswer={recordAulasQuizAnswer}
+                      onResetQuiz={resetAulasVideoQuiz}
+                      onMarkVideoCompleted={(v) => updateVideoWatchState(v, 'completed', {
+                        force: true,
+                        specialtyId: v.specialtyId,
+                        specialtyName: v.specialtyName,
+                        folderId: v.folderId,
+                        folderName: v.folderName
+                      })}
+                      onClose={() => setActiveVideoQuiz(null)}
+                    />
+                  )}
 
                   {activePdfModal && (
                     <NativePdfReaderModal
@@ -10705,7 +12386,22 @@
                                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${getAulasBadgeClass(selectedSpecialty.shortTag)}`}>
                                         {selectedSpecialty.shortTag}
                                       </span>
-                                      <span className="text-[11px] font-bold text-gray-400">#{String(realOrder).padStart(2, '0')}</span>
+                                      <div className="flex items-center gap-1.5">
+                                        {(() => {
+                                          const qs = getVideoQuizSummary(vid.id);
+                                          if (qs.completed) {
+                                            return <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">✓ {qs.total}q</span>;
+                                          }
+                                          if (qs.answered > 0) {
+                                            return <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">{qs.answered}/{qs.total}q</span>;
+                                          }
+                                          if (qs.total > 0) {
+                                            return <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">{qs.total}q</span>;
+                                          }
+                                          return null;
+                                        })()}
+                                        <span className="text-[11px] font-bold text-gray-400">#{String(realOrder).padStart(2, '0')}</span>
+                                      </div>
                                     </div>
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-snug line-clamp-3">
                                       {vid.title}
@@ -10874,6 +12570,19 @@
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
+                                {(() => {
+                                  const qs = getVideoQuizSummary(vid.id);
+                                  if (qs.completed) {
+                                    return <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">✓ {qs.total}q</span>;
+                                  }
+                                  if (qs.answered > 0) {
+                                    return <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/35">{qs.answered}/{qs.total}q</span>;
+                                  }
+                                  if (qs.total > 0) {
+                                    return <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">{qs.total}q</span>;
+                                  }
+                                  return null;
+                                })()}
                                 <span className={`hidden sm:inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${
                                   isSpotlight && isWatching
                                     ? 'bg-amber-400/20 text-amber-400'
@@ -11164,10 +12873,11 @@
                   </div>
                 )}
 
-                {/* Menus internos da Imersão (Playlists / Assistindo / Materiais PDF) */}
+                {/* Menus internos da Imersão (Evolução / Playlists / Assistindo / Materiais PDF) */}
                 <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 mb-5 sm:mb-6">
-                  <div className={`w-full sm:w-auto grid grid-cols-3 sm:inline-flex gap-1 p-1 rounded-2xl border ${isDark ? 'bg-[#18181c] border-[#2B2B32]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                  <div className={`w-full sm:w-auto grid grid-cols-2 sm:inline-flex gap-1 p-1 rounded-2xl border ${isDark ? 'bg-[#18181c] border-[#2B2B32]' : 'bg-white border-gray-200 shadow-sm'}`}>
                     {[
+                      { id: 'evolucao', short: 'Evolução', label: 'Evolução' },
                       { id: 'playlists', short: 'Playlists', label: 'Playlists por Especialidade' },
                       { id: 'watching', short: `Assistindo${overallStats.watching > 0 ? ` (${overallStats.watching})` : ''}`, label: `Continuar Assistindo${overallStats.watching > 0 ? ` (${overallStats.watching})` : ''}` },
                       { id: 'pdfs', short: `PDFs (${overallStats.pdfCount})`, label: `Materiais PDF (${overallStats.pdfCount})` }
@@ -11207,7 +12917,7 @@
                   <div className={`rounded-3xl p-12 text-center border ${isDark ? 'bg-[#18181c] border-[#2A2A30] text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}>
                     <div className="text-sm font-bold animate-pulse">Carregando catálogo da Imersão…</div>
                   </div>
-                ) : subTab === 'playlists' && specialties.length === 0 ? (
+                ) : (subTab === 'playlists' || subTab === 'evolucao') && specialties.length === 0 ? (
                   <div className={`rounded-3xl p-6 sm:p-8 border ${isDark ? 'bg-[#18181d] border-[#2C2C34] text-gray-200' : 'bg-white border-gray-200 text-gray-800 shadow-sm'}`}>
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-200 dark:border-white/10">
                       <div>
@@ -11240,6 +12950,220 @@
                         <div className="font-black text-purple-400 mb-1">3. Clique em Sincronizar</div>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Sempre que colocar novas aulas no Drive no futuro, clique em <strong>Sincronizar Drive</strong> aqui em cima e elas aparecem na hora.</p>
                       </div>
+                    </div>
+                  </div>
+                ) : subTab === 'evolucao' ? (
+                  <div className="space-y-5 sm:space-y-6" data-aulas-evolucao="1">
+                    {/* Banner principal: retomar última aula no Player */}
+                    {aulasEvolution.lastResumeTarget?.video && (
+                      <div className={`rounded-3xl p-4 sm:p-6 border flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                        isDark ? 'bg-gradient-to-r from-[#231936] via-[#1b1a24] to-[#17171d] border-purple-500/40 shadow-xl' : 'bg-gradient-to-r from-purple-50 to-white border-purple-200 shadow-sm'
+                      }`}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-purple-600/25 text-purple-300 border border-purple-500/40">
+                              Player da Imersão · {aulasEvolution.lastResumeTarget.sp.name}
+                            </span>
+                            <span className="text-xs font-bold text-gray-400 truncate">
+                              {aulasEvolution.lastResumeTarget.folder.name} · Aula {String(aulasEvolution.lastResumeTarget.order).padStart(2, '0')} de {String(aulasEvolution.lastResumeTarget.totalInFolder).padStart(2, '0')}
+                            </span>
+                          </div>
+                          <h3 className="text-base sm:text-xl font-black text-gray-900 dark:text-white leading-snug">
+                            {aulasEvolution.lastResumeTarget.video.title}
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Sistema exclusivo de questões dos vídeos (não altera Trilha nem Desafio Diário).
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                          <button
+                            type="button"
+                            data-evolucao-player-btn="global"
+                            onClick={() => startFolderPlaylistFromVideo(
+                              aulasEvolution.lastResumeTarget.sp,
+                              aulasEvolution.lastResumeTarget.folder,
+                              aulasEvolution.lastResumeTarget.video.id
+                            )}
+                            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 transition-colors"
+                          >
+                            <Icons.Play /> <span>Ir para o Player</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cards de resumo geral */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                      <div className={`rounded-2xl p-4 sm:p-5 border ${isDark ? 'bg-[#19191f] border-[#2B2B34]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        <div className="text-[11px] font-black uppercase tracking-wider text-emerald-400">Vídeos Assistidos</div>
+                        <div className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-2">
+                          {aulasEvolution.completedVideos}
+                          <span className="text-sm font-bold text-gray-400 ml-1">/ {aulasEvolution.totalVideos}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {aulasEvolution.watchingVideos} em andamento
+                        </div>
+                      </div>
+
+                      <div className={`rounded-2xl p-4 sm:p-5 border ${isDark ? 'bg-[#19191f] border-[#2B2B34]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        <div className="text-[11px] font-black uppercase tracking-wider text-amber-400">Vídeos Pendentes</div>
+                        <div className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-2">
+                          {aulasEvolution.pendingVideos}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {aulasEvolution.totalVideos ? Math.round((aulasEvolution.completedVideos / aulasEvolution.totalVideos) * 100) : 0}% do curso concluído
+                        </div>
+                      </div>
+
+                      <div className={`rounded-2xl p-4 sm:p-5 border ${isDark ? 'bg-[#19191f] border-[#2B2B34]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        <div className="text-[11px] font-black uppercase tracking-wider text-purple-400">Questões nos Vídeos</div>
+                        <div className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-2">
+                          {aulasEvolution.totalQuestions}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {aulasEvolution.videosWithQuestions} aulas com questões correlacionadas
+                        </div>
+                      </div>
+
+                      <div className={`rounded-2xl p-4 sm:p-5 border ${isDark ? 'bg-[#19191f] border-[#2B2B34]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        <div className="text-[11px] font-black uppercase tracking-wider text-sky-400">Questões Feitas / Faltam</div>
+                        <div className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mt-2">
+                          {aulasEvolution.answeredQuestions}
+                          <span className="text-sm font-bold text-gray-400 ml-1">/ faltam {aulasEvolution.remainingQuestions}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {aulasEvolution.answeredQuestions > 0 ? `${aulasEvolution.accuracyPct}% de acertos · ` : ''}{aulasEvolution.completedQuizVideos} aula(s) ✓
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Evolução detalhada por Especialidade */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {aulasEvolution.specialties.map(item => {
+                        const sp = item.sp;
+                        const pctVid = item.totalVideos ? Math.round((item.completedVideos / item.totalVideos) * 100) : 0;
+                        const pctVidWatch = item.totalVideos ? (item.watchingVideos / item.totalVideos) * 100 : 0;
+                        const pctQ = item.totalQuestions ? Math.round((item.answeredQuestions / item.totalQuestions) * 100) : 0;
+                        const isExpanded = Boolean(expandedEvolutionSpecs[sp.id]);
+
+                        return (
+                          <div
+                            key={sp.id}
+                            className={`rounded-3xl p-5 border flex flex-col justify-between gap-4 ${
+                              isDark ? 'bg-[#1A1A1E] border-[#2C2C33]' : 'bg-white border-gray-200 shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2.5 py-0.5 rounded-lg text-[11px] font-black uppercase border ${getAulasBadgeClass(sp.shortTag)}`}>
+                                      {sp.shortTag}
+                                    </span>
+                                    <h3 className="text-lg font-black text-gray-900 dark:text-white truncate">{sp.name}</h3>
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {item.folders.length} módulo(s) · {item.completedQuizVideos} aula(s) com questões ✓
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => startSpecialtyPlaylist(sp)}
+                                  disabled={item.totalVideos === 0}
+                                  className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-black flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                                  title="Abrir player na aula em que você parou nesta especialidade"
+                                >
+                                  <Icons.Play /> <span>Player</span>
+                                </button>
+                              </div>
+
+                              {/* Progresso de Vídeos */}
+                              <div className="mt-4">
+                                <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+                                  <span className="text-gray-700 dark:text-gray-200">
+                                    Vídeos: <strong className="text-emerald-400">{item.completedVideos} assistidos</strong> · <span className="text-amber-400">{item.pendingVideos} pendentes</span>
+                                  </span>
+                                  <span className="text-gray-400">{pctVid}%</span>
+                                </div>
+                                <div className={`h-2 rounded-full overflow-hidden flex ${isDark ? 'bg-[#2A2A32]' : 'bg-gray-200'}`}>
+                                  {pctVid > 0 && <div className="h-full bg-emerald-500" style={{ width: `${pctVid}%` }} />}
+                                  {pctVidWatch > 0 && <div className="h-full bg-amber-400" style={{ width: `${pctVidWatch}%` }} />}
+                                </div>
+                              </div>
+
+                              {/* Progresso de Questões dos Vídeos */}
+                              <div className="mt-3.5">
+                                <div className="flex items-center justify-between text-xs font-bold mb-1.5 gap-2">
+                                  <span className="text-gray-700 dark:text-gray-200">
+                                    Questões dos vídeos: <strong className="text-purple-400">{item.answeredQuestions} feita(s)</strong> · faltam {item.remainingQuestions} (de {item.totalQuestions})
+                                  </span>
+                                  <span className="text-gray-400 shrink-0">{pctQ}%</span>
+                                </div>
+                                <div className={`h-2 rounded-full overflow-hidden flex ${isDark ? 'bg-[#2A2A32]' : 'bg-gray-200'}`}>
+                                  {pctQ > 0 && <div className="h-full bg-indigo-500" style={{ width: `${pctQ}%` }} />}
+                                </div>
+                                {item.answeredQuestions > 0 && (
+                                  <div className="text-[11px] font-bold text-emerald-400 mt-1">
+                                    Aproveitamento nas aulas: {item.accuracyPct}% ({item.correctQuestions}/{item.answeredQuestions})
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-gray-200/70 dark:border-white/10 flex flex-wrap items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedEvolutionSpecs(prev => ({ ...prev, [sp.id]: !prev[sp.id] }))}
+                                className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-colors ${
+                                  isDark ? 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                                }`}
+                              >
+                                {isExpanded ? 'Ocultar módulos ▲' : `Ver módulos (${item.folders.length}) ▼`}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openSpecialty(sp)}
+                                className="text-xs font-bold text-purple-400 hover:text-purple-300"
+                              >
+                                Abrir especialidade →
+                              </button>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="space-y-2 pt-1 max-h-72 overflow-y-auto pr-1">
+                                {item.folders.map(fItem => (
+                                  <div
+                                    key={fItem.folder.id}
+                                    className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                                      isDark ? 'bg-black/25 border-white/10' : 'bg-gray-50 border-gray-200'
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-bold text-gray-900 dark:text-white truncate">{fItem.folder.name}</div>
+                                      <div className="text-[11px] text-gray-400 mt-0.5 flex flex-wrap items-center gap-x-2">
+                                        <span>Vídeos: {fItem.completedVideos}/{fItem.totalVideos}</span>
+                                        <span>·</span>
+                                        <span>Questões: {fItem.answeredQuestions}/{fItem.totalQuestions} (faltam {fItem.remainingQuestions})</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => startFolderPlaylistFromVideo(sp, fItem.folder, fItem.resumeTarget?.video?.id)}
+                                      disabled={fItem.totalVideos === 0}
+                                      className="px-2.5 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white text-[11px] font-black shrink-0 transition-colors"
+                                      title={`Abrir player em ${fItem.folder.name}`}
+                                    >
+                                      ▶
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : subTab === 'playlists' ? (
