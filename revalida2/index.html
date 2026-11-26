@@ -472,10 +472,13 @@
         }
 
         const HZ_SYNC_BASELINE_KEY = 'hfoqo_cross_device_sync_baseline_v1';
+        const FLASHCARDS_PROGRESS_KEY = 'hfoqo_flashcards_progress_v1';
+        const FLASHCARDS_CACHE_KEY = 'hfoqo_flashcards_catalog_cache_v1';
         const HZ_SYNC_EXCLUDED_KEYS = new Set([
           HZ_SYNC_BASELINE_KEY,
           'hfoqo_biblioteca_resumos_cache_v1',
           'hfoqo_aulas_catalog_cache_v1',
+          FLASHCARDS_CACHE_KEY,
           'hfoqo_aulas_player_mode_v1',
           'hfoqo_aulas_player_mode_v2',
           'hfoqo_aulas_player_mode_v3',
@@ -483,6 +486,239 @@
           'hfoqo_legacy_progress_user_id',
           'hfoqo_progress_migrated_v2'
         ]);
+
+        const HZ_DEFAULT_FLASHCARDS = [
+          {
+            id: 'fc_seed_cm_sta',
+            specialty: 'Clínica Médica',
+            theme: 'Hematologia: Síndrome torácica aguda',
+            question: 'Como se define a síndrome torácica aguda (STA) na anemia falciforme?',
+            option1: 'Infiltrado pulmonar novo no RX + febre e/ou sintomas respiratórios',
+            option2: 'Hemoglobina < 5 g/dL isolada com reticulocitopenia aguda',
+            answerText: 'Infiltrado pulmonar novo no RX + febre e/ou sintomas respiratórios',
+            concept: 'A STA é emergência na doença falciforme definida por novo infiltrado pulmonar associado a febre ou sintomas respiratórios (dor torácica, dispneia, tosse, hipóxia). Exige internação, hidratação cautelosa, analgesia, oxigenoterapia se SpO2 < 95%, antibioticoterapia (betalactâmico + macrolídeo) e considerar transfusão / exsanguíneo.'
+          },
+          {
+            id: 'fc_seed_ped_reanimacao',
+            specialty: 'Pediatria',
+            theme: 'Neonatologia: Reanimação neonatal',
+            question: 'RN a termo nasce hipotônico e em apneia; após 30s de passos iniciais continua em apneia ou FC < 100 bpm. Conduta imediata:',
+            option1: 'Iniciar ventilação com pressão positiva (VPP) em ar ambiente (FiO2 21%)',
+            option2: 'Iniciar compressões torácicas 3:1 associadas a adrenalina',
+            answerText: 'Iniciar ventilação com pressão positiva (VPP) em ar ambiente (FiO2 21%)',
+            concept: 'Na reanimação neonatal (>= 34 semanas), a VPP é a intervenção mais importante e deve ser iniciada no 1º minuto (Golden Minute) em ar ambiente (21%) se apneia, respiração irregular ou FC < 100 bpm após aquecer, secar e desobstruir vias aéreas.'
+          },
+          {
+            id: 'fc_seed_cg_trauma_cervical',
+            specialty: 'Cirurgia',
+            theme: 'Trauma: Trauma cervical',
+            question: 'Paciente vítima de ferimento penetrante em zona II do pescoço com sangramento ativo pulsátil e hematoma em expansão. Conduta imediata:',
+            option1: 'Exploração cirúrgica imediata em centro cirúrgico',
+            option2: 'Angiotomografia cervical e observação seriada em UTI',
+            answerText: 'Exploração cirúrgica imediata em centro cirúrgico',
+            concept: 'Sinais duros de lesão vascular/aerodigestiva (sangramento pulsátil, hematoma em expansão, choque refratário, sopro/frêmito, enfisema subcutâneo maciço, hemoptise) indicam cervicotomia exploradora imediata, independentemente da zona.'
+          },
+          {
+            id: 'fc_seed_prev_notificacao',
+            specialty: 'Preventiva',
+            theme: 'Vigilância: Doenças de notificação compulsória',
+            question: 'Gestante atendida na UBS com quadro agudo de sarampo confirmado/suspeito. Qual a periodicidade de notificação ao SINAN?',
+            option1: 'Notificação compulsória imediata (em até 24 horas)',
+            option2: 'Notificação compulsória semanal pela vigilância municipal',
+            answerText: 'Notificação compulsória imediata (em até 24 horas)',
+            concept: 'Casos suspeitos ou confirmados de doenças exantemáticas (sarampo e rubéola), meningites, raiva, cólera, febre amarela, botulismo e eventos adversos graves exigem notificação imediata em até 24 horas pelo meio mais rápido disponível.'
+          },
+          {
+            id: 'fc_seed_go_eclampsia',
+            specialty: 'Ginecologia e Obstetrícia',
+            theme: 'Obstetrícia: Síndromes hipertensivas',
+            question: 'Gestante no terceiro trimestre com cefaleia intensa, visão turva e PA de 160x110 mmHg deve receber imediatamente:',
+            option1: 'Sulfato de magnésio para prevenção de convulsões',
+            option2: 'Nifedipina oral isolada para prevenção de convulsões',
+            answerText: 'Sulfato de magnésio para prevenção de convulsões',
+            concept: 'Sinais de iminência de eclâmpsia (cefaleia, escotomas/visão turva, epigastralgia) associados à hipertensão grave exigem sulfato de magnésio imediato (esquema Pritchard ou Zuspan) para prevenção/tratamento de convulsões, além de anti-hipertensivo (hidralazina IV ou nifedipino VO) e estabilização materna.'
+          }
+        ];
+
+        function normalizeFlashcardText(value) {
+          return String(value == null ? '' : value)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\p{L}\p{N}\s:_-]/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+        }
+
+        function getFlashcardSpecialtyMeta(rawSpecialty) {
+          const label = String(rawSpecialty || 'Geral').trim() || 'Geral';
+          const key = normalizeFlashcardText(label);
+          if (key === 'cm' || key.includes('clinica medica') || key.includes('clinica')) {
+            return {
+              key: 'cm',
+              badgeCode: 'CM',
+              label: label,
+              accent: '#dc2626',
+              badgeBg: 'rgba(220, 38, 38, 0.14)',
+              badgeTextDark: '#fca5a5',
+              badgeTextLight: '#b91c1c'
+            };
+          }
+          if (key === 'ped' || key.includes('pediatria')) {
+            return {
+              key: 'ped',
+              badgeCode: 'PED',
+              label: label,
+              accent: '#eab308',
+              badgeBg: 'rgba(234, 179, 8, 0.17)',
+              badgeTextDark: '#fde047',
+              badgeTextLight: '#a16207'
+            };
+          }
+          if (key === 'cg' || key.includes('cirurgia')) {
+            return {
+              key: 'cg',
+              badgeCode: 'CG',
+              label: label,
+              accent: '#2563eb',
+              badgeBg: 'rgba(37, 99, 235, 0.15)',
+              badgeTextDark: '#93c5fd',
+              badgeTextLight: '#1d4ed8'
+            };
+          }
+          if (key === 'prev' || key.includes('preventiva') || key.includes('saude coletiva') || key.includes('sus')) {
+            return {
+              key: 'prev',
+              badgeCode: 'PREV',
+              label: label,
+              accent: '#16a34a',
+              badgeBg: 'rgba(22, 163, 74, 0.15)',
+              badgeTextDark: '#86efac',
+              badgeTextLight: '#15803d'
+            };
+          }
+          if (key === 'go' || key.includes('ginecolog') || key.includes('obstetr')) {
+            return {
+              key: 'go',
+              badgeCode: 'GO',
+              label: label,
+              accent: '#f472b6',
+              badgeBg: 'rgba(244, 114, 182, 0.18)',
+              badgeTextDark: '#fbcfe8',
+              badgeTextLight: '#be185d'
+            };
+          }
+          if (key.includes('inep') || key.includes('revalida') || key.includes('enamed')) {
+            return {
+              key: 'inep',
+              badgeCode: 'INEP',
+              label: label,
+              accent: '#9333ea',
+              badgeBg: 'rgba(147, 51, 234, 0.16)',
+              badgeTextDark: '#d8b4fe',
+              badgeTextLight: '#7e22ce'
+            };
+          }
+          const words = key.split(/\s+/).filter(Boolean);
+          const code = words.length >= 2
+            ? words.slice(0, 3).map(w => w[0]).join('').toUpperCase()
+            : (key.slice(0, 4).toUpperCase() || 'GER');
+          return {
+            key: key || 'geral',
+            badgeCode: code,
+            label: label,
+            accent: '#6366f1',
+            badgeBg: 'rgba(99, 102, 241, 0.15)',
+            badgeTextDark: '#c7d2fe',
+            badgeTextLight: '#4338ca'
+          };
+        }
+
+        function normalizeFlashcardRecord(raw, idx = 0) {
+          const item = raw && typeof raw === 'object' ? raw : {};
+          const specialty = String(item.specialty || item.category || item.especialidade || 'Geral').trim() || 'Geral';
+          const theme = String(item.theme || item.tema || item.badge || 'Revisão').trim() || 'Revisão';
+          const question = String(item.question || item.title || item.pergunta || '').trim();
+          const opt1 = String(item.option1 || item.alternativa1 || (Array.isArray(item.options) ? item.options[0] : '') || '').trim();
+          const opt2 = String(item.option2 || item.alternativa2 || (Array.isArray(item.options) ? item.options[1] : '') || '').trim();
+          const hasOptions = !!(opt1 && opt2);
+          const options = hasOptions ? [opt1, opt2] : [];
+          let correct = typeof item.correct === 'number' && (item.correct === 0 || item.correct === 1) ? item.correct : -1;
+          const rawAnsText = String(item.answerText || item.respostaCorreta || item.correctAnswer || item.answer || '').trim();
+          if (hasOptions) {
+            if (correct !== 0 && correct !== 1) {
+              const keyUpper = String(item.answerKey || item.answer || '').trim().toUpperCase();
+              if (keyUpper === 'A' || keyUpper === '0' || keyUpper === '1') correct = 0;
+              else if (keyUpper === 'B' || keyUpper === '2') correct = 1;
+              else if (normalizeFlashcardText(rawAnsText) === normalizeFlashcardText(opt2)) correct = 1;
+              else correct = 0;
+            }
+          }
+          const answerText = hasOptions
+            ? ((rawAnsText && rawAnsText !== 'A' && rawAnsText !== 'B') ? rawAnsText : (options[correct] || rawAnsText))
+            : rawAnsText;
+          const concept = String(item.concept || item.conceitoChave || item.conceito || item.explanation || '').trim();
+          const id = String(item.id || item.cardId || `fc_${idx}_${normalizeFlashcardText(question).slice(0, 24)}`).trim();
+          return {
+            id,
+            specialty,
+            theme,
+            themeKey: `${normalizeFlashcardText(specialty)}::${normalizeFlashcardText(theme)}`,
+            question,
+            option1: opt1,
+            option2: opt2,
+            options,
+            hasOptions,
+            correct,
+            answerText,
+            concept,
+            active: item.active !== false,
+            updatedAt: String(item.updatedAt || '')
+          };
+        }
+
+        function normalizeFlashcardsProgress(raw) {
+          const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+          const masteredIds = Array.isArray(src.masteredIds) ? Array.from(new Set(src.masteredIds.map(String).filter(Boolean))) : [];
+          const masteredSet = new Set(masteredIds);
+          const wrongIds = Array.isArray(src.wrongIds)
+            ? Array.from(new Set(src.wrongIds.map(String).filter(id => id && !masteredSet.has(id))))
+            : [];
+          const themeSessions = {};
+          if (src.themeSessions && typeof src.themeSessions === 'object' && !Array.isArray(src.themeSessions)) {
+            Object.entries(src.themeSessions).forEach(([k, sess]) => {
+              if (!sess || typeof sess !== 'object' || !Array.isArray(sess.queueIds)) return;
+              const queueIds = sess.queueIds.map(String).filter(Boolean);
+              if (!queueIds.length) return;
+              themeSessions[String(k)] = {
+                queueIds,
+                index: Math.max(0, Math.min(queueIds.length - 1, Number(sess.index || 0))),
+                results: sess.results && typeof sess.results === 'object' ? sess.results : {},
+                updatedAt: String(sess.updatedAt || '')
+              };
+            });
+          }
+          const dailyStats = {};
+          if (src.dailyStats && typeof src.dailyStats === 'object' && !Array.isArray(src.dailyStats)) {
+            Object.entries(src.dailyStats).forEach(([dKey, entry]) => {
+              if (!entry || typeof entry !== 'object') return;
+              dailyStats[String(dKey)] = {
+                done: Math.max(0, Number(entry.done || 0)),
+                hits: Math.max(0, Number(entry.hits || 0)),
+                misses: Math.max(0, Number(entry.misses || 0))
+              };
+            });
+          }
+          const dailyGoal = Math.max(10, Math.min(500, Number(src.dailyGoal || 0) || 0)) || 0;
+          return {
+            masteredIds,
+            wrongIds,
+            themeSessions,
+            dailyStats,
+            dailyGoal,
+            resetAt: String(src.resetAt || '')
+          };
+        }
         function notifyHfoqoCloudSyncNeeded() {
           try { window.dispatchEvent(new Event('hfoqo-cloud-sync-needed')); } catch {}
         }
@@ -707,6 +943,82 @@
             if (resetStampStr) storage.hfoqo_aulas_videos_reset_at = resetStampStr;
           }
 
+          const localFlashcardsResetAt = String(local?.flashcardsResetAt || local?.storage?.hfoqo_flashcards_reset_at || localResetAt || '');
+          const remoteFlashcardsResetAt = String(remote?.flashcardsResetAt || remote?.storage?.hfoqo_flashcards_reset_at || remoteResetAt || '');
+          const baselineFlashcardsResetAt = String(baseline?.flashcardsResetAt || baseline?.storage?.hfoqo_flashcards_reset_at || baselineResetAt || '');
+          const flashcardsResetWinner = stamp(remoteFlashcardsResetAt) > stamp(baselineFlashcardsResetAt) && stamp(remoteFlashcardsResetAt) >= stamp(localFlashcardsResetAt)
+            ? remote : stamp(localFlashcardsResetAt) > stamp(baselineFlashcardsResetAt) && stamp(localFlashcardsResetAt) > stamp(remoteFlashcardsResetAt) ? local : null;
+          if (flashcardsResetWinner) {
+            const fcWinnerStore = flashcardsResetWinner.storage && typeof flashcardsResetWinner.storage === 'object' ? flashcardsResetWinner.storage : {};
+            const fcParsed = hfoqoParseStorageValue(fcWinnerStore.hfoqo_flashcards_progress_v1);
+            const fcWinnerState = hfoqoIsPlainObject(flashcardsResetWinner.appState?.flashcardsProgress)
+              ? flashcardsResetWinner.appState.flashcardsProgress
+              : (fcParsed.parsed && hfoqoIsPlainObject(fcParsed.value) ? fcParsed.value : { masteredIds: [], wrongIds: [], themeSessions: {}, dailyStats: {}, resetAt: '' });
+            appState.flashcardsProgress = normalizeFlashcardsProgress(fcWinnerState);
+            storage.hfoqo_flashcards_progress_v1 = JSON.stringify(appState.flashcardsProgress);
+            const fcResetStampStr = String(flashcardsResetWinner.flashcardsResetAt || fcWinnerStore.hfoqo_flashcards_reset_at || flashcardsResetWinner.resetAt || '');
+            if (fcResetStampStr) storage.hfoqo_flashcards_reset_at = fcResetStampStr;
+          } else {
+            const readFc = (obj) => {
+              const p = hfoqoParseStorageValue(obj?.storage?.hfoqo_flashcards_progress_v1);
+              return normalizeFlashcardsProgress(hfoqoIsPlainObject(obj?.appState?.flashcardsProgress) ? obj.appState.flashcardsProgress : (p.parsed ? p.value : {}));
+            };
+            const lFc = readFc(local);
+            const rFc = readFc(remote);
+            const bFc = readFc(baseline);
+            const merge3WayIds = (baseArr, locArr, remArr) => {
+              const baseSet = new Set(baseArr);
+              const locSet = new Set(locArr);
+              const merged = new Set(remArr);
+              locArr.forEach(id => { if (!baseSet.has(id)) merged.add(id); });
+              baseArr.forEach(id => { if (!locSet.has(id)) merged.delete(id); });
+              return Array.from(merged);
+            };
+            const mastered = merge3WayIds(bFc.masteredIds, lFc.masteredIds, rFc.masteredIds);
+            const masteredSet = new Set(mastered);
+            const wrong = merge3WayIds(bFc.wrongIds, lFc.wrongIds, rFc.wrongIds).filter(id => !masteredSet.has(id));
+            const sessionKeys = new Set([
+              ...Object.keys(bFc.themeSessions),
+              ...Object.keys(lFc.themeSessions),
+              ...Object.keys(rFc.themeSessions)
+            ]);
+            const mergedSessions = {};
+            sessionKeys.forEach(k => {
+              const ls = lFc.themeSessions[k];
+              const rs = rFc.themeSessions[k];
+              const bs = bFc.themeSessions[k];
+              const lTs = stamp(ls?.updatedAt);
+              const rTs = stamp(rs?.updatedAt);
+              const bTs = stamp(bs?.updatedAt);
+              if (ls && rs) {
+                mergedSessions[k] = rTs >= lTs ? rs : ls;
+              } else if (ls && !rs) {
+                if (!bs || lTs > bTs) mergedSessions[k] = ls;
+              } else if (!ls && rs) {
+                if (!bs || rTs > bTs) mergedSessions[k] = rs;
+              }
+            });
+            const mergedDaily = { ...lFc.dailyStats };
+            Object.entries(rFc.dailyStats).forEach(([dk, rd]) => {
+              const ld = mergedDaily[dk] || { done: 0, hits: 0, misses: 0 };
+              mergedDaily[dk] = {
+                done: Math.max(ld.done, rd.done),
+                hits: Math.max(ld.hits, rd.hits),
+                misses: Math.max(ld.misses, rd.misses)
+              };
+            });
+            const mergedFc = normalizeFlashcardsProgress({
+              masteredIds: mastered,
+              wrongIds: wrong,
+              themeSessions: mergedSessions,
+              dailyStats: mergedDaily,
+              dailyGoal: rFc.dailyGoal || lFc.dailyGoal,
+              resetAt: String(remoteFlashcardsResetAt || localFlashcardsResetAt || '')
+            });
+            appState.flashcardsProgress = mergedFc;
+            storage.hfoqo_flashcards_progress_v1 = JSON.stringify(mergedFc);
+          }
+
           return {
             schema: 1,
             userId: String((remote && remote.userId) || (local && local.userId) || ''),
@@ -715,6 +1027,7 @@
             bancoResetAt: String(bancoResetWinner?.bancoResetAt || remoteBancoResetAt || localBancoResetAt || baselineBancoResetAt || ''),
             bancoMetricsResetAt: String(bancoMetricsResetWinner?.bancoMetricsResetAt || remoteBancoMetricsResetAt || localBancoMetricsResetAt || baselineBancoMetricsResetAt || ''),
             aulasVideosResetAt: String(aulasVideosResetWinner?.aulasVideosResetAt || remoteAulasVideosResetAt || localAulasVideosResetAt || baselineAulasVideosResetAt || ''),
+            flashcardsResetAt: String(flashcardsResetWinner?.flashcardsResetAt || remoteFlashcardsResetAt || localFlashcardsResetAt || baselineFlashcardsResetAt || ''),
             storage, appState
           };
         }
@@ -723,7 +1036,8 @@
           return hfoqoSyncEqual(a.storage || {}, b.storage || {}) && hfoqoSyncEqual(a.appState || {}, b.appState || {}) &&
             String(a.resetAt || '') === String(b.resetAt || '') && String(a.bancoResetAt || '') === String(b.bancoResetAt || '') &&
             String(a.bancoMetricsResetAt || '') === String(b.bancoMetricsResetAt || '') &&
-            String(a.aulasVideosResetAt || '') === String(b.aulasVideosResetAt || '');
+            String(a.aulasVideosResetAt || '') === String(b.aulasVideosResetAt || '') &&
+            String(a.flashcardsResetAt || '') === String(b.flashcardsResetAt || '');
         }
 
         async function progressApi(action, params = {}, timeout = 30000) {
@@ -1754,7 +2068,31 @@
           Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>,
           ExternalLink: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>,
           List: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>,
-          Video: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+          Video: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>,
+          Flashcard: () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="3" width="12" height="18" rx="2.5" strokeWidth="1.9"></rect>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" d="M12.5 8.5L10 12h3.5L11.5 15.5"></path>
+            </svg>
+          ),
+          BookHourglass: ({ className = "w-7 h-7" }) => (
+            <svg className={className} fill="none" viewBox="0 0 32 32">
+              <path d="M5 7.5C5 6.4 5.9 5.5 7 5.5H13C14.7 5.5 16 6.8 16 8.5V23.5C16 22.1 14.9 21 13.5 21H7C5.9 21 5 20.1 5 19V7.5Z" stroke="currentColor" strokeWidth="2.1" strokeLinejoin="round"/>
+              <path d="M27 7.5C27 6.4 26.1 5.5 25 5.5H19C17.3 5.5 16 6.8 16 8.5V16" stroke="currentColor" strokeWidth="2.1" strokeLinejoin="round"/>
+              <path d="M8.5 10H12.5M8.5 13.5H12.5M8.5 17H11.5M19.5 10H23.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <circle cx="22.5" cy="22.5" r="5.5" fill="currentColor"/>
+              <path d="M20.3 19.6H24.7M20.3 25.4H24.7M20.9 19.6L22.5 22.5L24.1 19.6M20.9 25.4L22.5 22.5L24.1 25.4" stroke="#ffffff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ),
+          BookTrophy: ({ className = "w-7 h-7" }) => (
+            <svg className={className} fill="none" viewBox="0 0 32 32">
+              <path d="M5 7.5C5 6.4 5.9 5.5 7 5.5H13C14.7 5.5 16 6.8 16 8.5V23.5C16 22.1 14.9 21 13.5 21H7C5.9 21 5 20.1 5 19V7.5Z" stroke="currentColor" strokeWidth="2.1" strokeLinejoin="round"/>
+              <path d="M27 7.5C27 6.4 26.1 5.5 25 5.5H19C17.3 5.5 16 6.8 16 8.5V16" stroke="currentColor" strokeWidth="2.1" strokeLinejoin="round"/>
+              <path d="M8.5 10H12.5M8.5 13.5H12.5M8.5 17H11.5M19.5 10H23.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              <circle cx="22.5" cy="22.5" r="5.5" fill="currentColor"/>
+              <path d="M20.5 20H24.5V21.7C24.5 22.8 23.6 23.6 22.5 23.6C21.4 23.6 20.5 22.8 20.5 21.7V20ZM22.5 23.6V25.2M21 25.2H24" stroke="#ffffff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )
         };
 
         function loadStoredCompletedThemeHistory() {
@@ -5596,6 +5934,192 @@
             }
           }, [activeAccess, currentView]);
 
+          // =========================================================================
+          // FLASHCARDS — CATÁLOGO, PROGRESSO E SINCRONIZAÇÃO
+          // =========================================================================
+          const [flashcardsCatalog, setFlashcardsCatalog] = useState(() => {
+            try {
+              const cached = JSON.parse(localStorage.getItem(FLASHCARDS_CACHE_KEY) || 'null');
+              if (cached && Array.isArray(cached.cards)) {
+                return cached.cards.map((c, idx) => normalizeFlashcardRecord(c, idx)).filter(c => c.active && c.question);
+              }
+            } catch {}
+            return HZ_DEFAULT_FLASHCARDS.map((c, idx) => normalizeFlashcardRecord(c, idx));
+          });
+          const [flashcardsLoading, setFlashcardsLoading] = useState(false);
+          const [flashcardsSyncMessage, setFlashcardsSyncMessage] = useState('');
+          const [flashcardsSyncError, setFlashcardsSyncError] = useState(false);
+          const flashcardsSyncInFlightRef = React.useRef(false);
+          const flashcardsInitialLoadedRef = React.useRef(false);
+          const [flashcardSessionActive, setFlashcardSessionActive] = useState(false);
+          const [flashcardsProgress, setFlashcardsProgress] = useState(() => {
+            try { return normalizeFlashcardsProgress(JSON.parse(localStorage.getItem(FLASHCARDS_PROGRESS_KEY) || '{}')); }
+            catch { return normalizeFlashcardsProgress({}); }
+          });
+
+          const loadFlashcardsCatalog = async ({ manual = false, silent = false } = {}) => {
+            if (flashcardsSyncInFlightRef.current) return false;
+            flashcardsSyncInFlightRef.current = true;
+            if (!flashcardsCatalog.length) setFlashcardsLoading(true);
+            if (manual) {
+              setFlashcardsSyncError(false);
+              setFlashcardsSyncMessage('Atualizando flashcards do servidor…');
+            }
+            try {
+              const res = await liveApi('listCards', {}, 45000);
+              if (!res || res.ok === false || !Array.isArray(res.cards)) {
+                throw new Error(res?.error || 'Não foi possível carregar os flashcards do servidor.');
+              }
+              const normalized = res.cards.map((c, idx) => normalizeFlashcardRecord(c, idx)).filter(c => c.active && c.question);
+              setFlashcardsCatalog(normalized);
+              try {
+                localStorage.setItem(FLASHCARDS_CACHE_KEY, JSON.stringify({
+                  savedAt: new Date().toISOString(),
+                  cards: normalized
+                }));
+              } catch {}
+              if (manual) {
+                setFlashcardsSyncError(false);
+                setFlashcardsSyncMessage(`${normalized.length} flashcard(s) atualizado(s).`);
+              }
+              return true;
+            } catch (err) {
+              if (!silent || manual) {
+                setFlashcardsSyncError(true);
+                setFlashcardsSyncMessage(err?.message || 'Erro ao sincronizar flashcards.');
+              }
+              return false;
+            } finally {
+              flashcardsSyncInFlightRef.current = false;
+              setFlashcardsLoading(false);
+            }
+          };
+
+          useEffect(() => {
+            try {
+              const serialized = JSON.stringify(flashcardsProgress);
+              if (localStorage.getItem(FLASHCARDS_PROGRESS_KEY) !== serialized) {
+                localStorage.setItem(FLASHCARDS_PROGRESS_KEY, serialized);
+                notifyHfoqoCloudSyncNeeded();
+              }
+            } catch {}
+          }, [flashcardsProgress]);
+
+          useEffect(() => {
+            if (activeAccess !== 'main') {
+              flashcardsInitialLoadedRef.current = false;
+              setFlashcardSessionActive(false);
+              return;
+            }
+            if (currentView !== 'flashcards' && flashcardSessionActive) {
+              setFlashcardSessionActive(false);
+            }
+            if (!flashcardsInitialLoadedRef.current || currentView === 'flashcards') {
+              flashcardsInitialLoadedRef.current = true;
+              loadFlashcardsCatalog({ manual: false, silent: true });
+            }
+          }, [activeAccess, currentView]);
+
+          const mutateFlashcardsProgress = (updater) => {
+            setFlashcardsProgress(prev => {
+              const next = normalizeFlashcardsProgress(typeof updater === 'function' ? updater(prev) : updater);
+              try {
+                localStorage.setItem(FLASHCARDS_PROGRESS_KEY, JSON.stringify(next));
+                notifyHfoqoCloudSyncNeeded();
+              } catch {}
+              return next;
+            });
+            window.setTimeout(() => { cloudSyncFunctionsRef.current.queue?.(900); }, 50);
+          };
+
+          const recordFlashcardDecision = (cardId, outcome, themeKey, nextSessionState) => {
+            const cleanId = String(cardId || '').trim();
+            if (!cleanId) return;
+            const todayKey = localDateKey();
+            mutateFlashcardsProgress(prev => {
+              const masteredSet = new Set(prev.masteredIds);
+              const wrongSet = new Set(prev.wrongIds);
+              if (outcome === 'hit') {
+                masteredSet.add(cleanId);
+                wrongSet.delete(cleanId);
+              } else {
+                masteredSet.delete(cleanId);
+                wrongSet.add(cleanId);
+              }
+              const sessions = { ...prev.themeSessions };
+              if (themeKey) {
+                if (nextSessionState) sessions[themeKey] = nextSessionState;
+                else delete sessions[themeKey];
+              }
+              const prevDay = prev.dailyStats[todayKey] || { done: 0, hits: 0, misses: 0 };
+              return {
+                ...prev,
+                masteredIds: Array.from(masteredSet),
+                wrongIds: Array.from(wrongSet),
+                themeSessions: sessions,
+                dailyStats: {
+                  ...prev.dailyStats,
+                  [todayKey]: {
+                    done: prevDay.done + 1,
+                    hits: prevDay.hits + (outcome === 'hit' ? 1 : 0),
+                    misses: prevDay.misses + (outcome === 'miss' ? 1 : 0)
+                  }
+                }
+              };
+            });
+          };
+
+          const saveFlashcardSessionCheckpoint = (themeKey, sessionState) => {
+            if (!themeKey) return;
+            mutateFlashcardsProgress(prev => {
+              const sessions = { ...prev.themeSessions };
+              if (sessionState && Array.isArray(sessionState.queueIds) && sessionState.queueIds.length > 0) {
+                sessions[themeKey] = {
+                  ...sessionState,
+                  updatedAt: new Date().toISOString()
+                };
+              } else {
+                delete sessions[themeKey];
+              }
+              return { ...prev, themeSessions: sessions };
+            });
+          };
+
+          const forceFinishFlashcardTheme = (themeKey, cardIds = []) => {
+            mutateFlashcardsProgress(prev => {
+              const masteredSet = new Set(prev.masteredIds);
+              const wrongSet = new Set(prev.wrongIds);
+              cardIds.forEach(cid => {
+                const clean = String(cid || '').trim();
+                if (!clean) return;
+                masteredSet.add(clean);
+                wrongSet.delete(clean);
+              });
+              const sessions = { ...prev.themeSessions };
+              if (themeKey) delete sessions[themeKey];
+              return {
+                ...prev,
+                masteredIds: Array.from(masteredSet),
+                wrongIds: Array.from(wrongSet),
+                themeSessions: sessions
+              };
+            });
+          };
+
+          const resetFlashcardThemeProgress = (themeKey, cardIds = []) => {
+            const removeSet = new Set(cardIds.map(String));
+            mutateFlashcardsProgress(prev => {
+              const sessions = { ...prev.themeSessions };
+              if (themeKey) delete sessions[themeKey];
+              return {
+                ...prev,
+                masteredIds: prev.masteredIds.filter(id => !removeSet.has(id)),
+                wrongIds: prev.wrongIds.filter(id => !removeSet.has(id)),
+                themeSessions: sessions
+              };
+            });
+          };
+
           // Estados de navegação interna
           const [activeTema, setActiveTema] = useState(null);
           const [questionQueue, setQuestionQueue] = useState([]);
@@ -5917,10 +6441,11 @@
               bancoResetAt: (() => { try { return localStorage.getItem('hfoqo_banco_reset_at') || ''; } catch { return ''; } })(),
               bancoMetricsResetAt: (() => { try { return localStorage.getItem('hfoqo_banco_metrics_reset_at') || ''; } catch { return ''; } })(),
               aulasVideosResetAt: (() => { try { return localStorage.getItem('hfoqo_aulas_videos_reset_at') || ''; } catch { return ''; } })(),
+              flashcardsResetAt: (() => { try { return localStorage.getItem('hfoqo_flashcards_reset_at') || ''; } catch { return ''; } })(),
               storage,
               appState: {
                 startDate, examDate, dailyQuestionGoal, dailyPlan, activeRound, bancoActiveRound, isDark, desafioSettings,
-                bibliotecaStatus, aulasProgress, completedQuestionIds, completedImmersaoQuestionIds,
+                bibliotecaStatus, aulasProgress, flashcardsProgress, completedQuestionIds, completedImmersaoQuestionIds,
                 completedThemeHistory, desafioThemeHistory, desafioKnownQuestionIds, desafioLimboQuestionIds,
                 trilhaLimboQuestionIds, activityLog, limboList, limboSelections
               }
@@ -5934,12 +6459,14 @@
             const incomingBancoResetAt = String(snapshot.bancoResetAt || storage.hfoqo_banco_reset_at || '');
             const incomingBancoMetricsResetAt = String(snapshot.bancoMetricsResetAt || storage.hfoqo_banco_metrics_reset_at || '');
             const incomingAulasVideosResetAt = String(snapshot.aulasVideosResetAt || storage.hfoqo_aulas_videos_reset_at || '');
-            let localResetAt = '', localBancoResetAt = '', localBancoMetricsResetAt = '', localAulasVideosResetAt = '';
+            const incomingFlashcardsResetAt = String(snapshot.flashcardsResetAt || storage.hfoqo_flashcards_reset_at || incomingResetAt || '');
+            let localResetAt = '', localBancoResetAt = '', localBancoMetricsResetAt = '', localAulasVideosResetAt = '', localFlashcardsResetAt = '';
             try {
               localResetAt = localStorage.getItem('hfoqo_progress_reset_at') || '';
               localBancoResetAt = localStorage.getItem('hfoqo_banco_reset_at') || '';
               localBancoMetricsResetAt = localStorage.getItem('hfoqo_banco_metrics_reset_at') || '';
               localAulasVideosResetAt = localStorage.getItem('hfoqo_aulas_videos_reset_at') || '';
+              localFlashcardsResetAt = localStorage.getItem('hfoqo_flashcards_reset_at') || localResetAt || '';
             } catch {}
             const incomingStamp = Date.parse(incomingResetAt) || 0;
             const localStamp = Date.parse(localResetAt) || 0;
@@ -5949,13 +6476,15 @@
             const localBancoMetricsStamp = Date.parse(localBancoMetricsResetAt) || 0;
             const incomingAulasVideosStamp = Date.parse(incomingAulasVideosResetAt) || 0;
             const localAulasVideosStamp = Date.parse(localAulasVideosResetAt) || 0;
+            const incomingFlashcardsStamp = Math.max(incomingStamp, Date.parse(incomingFlashcardsResetAt) || 0);
+            const localFlashcardsStamp = Math.max(localStamp, Date.parse(localFlashcardsResetAt) || 0);
             try {
               if (incomingStamp > localStamp) {
                 const exactProgressKeys = new Set([
                   'hfoqo_completed_questions','hfoqo_completed_immersao_questions','hfoqo_completed_theme_history',
                   'hfoqo_desafio_theme_history','hfoqo_desafio_known_questions','hfoqo_desafio_limbo_questions',
                   'hfoqo_trilha_limbo_questions','hfoqo_activity_log','hfoqo_limbo','hfoqo_limbo_selections',
-                  'hfoqo_active_round_v1','hfoqo_round_results_v2','hfoqo_completed_theme_keys_v1'
+                  'hfoqo_active_round_v1','hfoqo_round_results_v2','hfoqo_completed_theme_keys_v1','hfoqo_flashcards_progress_v1'
                 ]);
                 const staleKeys = [];
                 for (let i = 0; i < localStorage.length; i++) {
@@ -5977,6 +6506,7 @@
               if (incomingBancoResetAt) localStorage.setItem('hfoqo_banco_reset_at', incomingBancoResetAt);
               if (incomingBancoMetricsResetAt) localStorage.setItem('hfoqo_banco_metrics_reset_at', incomingBancoMetricsResetAt);
               if (incomingAulasVideosResetAt) localStorage.setItem('hfoqo_aulas_videos_reset_at', incomingAulasVideosResetAt);
+              if (incomingFlashcardsResetAt) localStorage.setItem('hfoqo_flashcards_reset_at', incomingFlashcardsResetAt);
               Object.entries(storage).forEach(([key, value]) => {
                 if (!key.startsWith('hfoqo_') || HZ_SYNC_EXCLUDED_KEYS.has(key) || value == null) return;
                 localStorage.setItem(key, String(value));
@@ -5998,6 +6528,8 @@
               }
               return mergeAulasProgress(prev, incomingAulas);
             });
+            const incomingFlashcards = normalizeFlashcardsProgress(obj(a.flashcardsProgress, fromStorage('hfoqo_flashcards_progress_v1', {})));
+            setFlashcardsProgress(incomingFlashcards);
             setCompletedQuestionIds(arr(a.completedQuestionIds, fromStorage('hfoqo_completed_questions', completedQuestionIds)).map(String));
             setCompletedImmersaoQuestionIds(arr(a.completedImmersaoQuestionIds, fromStorage('hfoqo_completed_immersao_questions', completedImmersaoQuestionIds)).map(String));
             setCompletedThemeHistory(arr(a.completedThemeHistory, fromStorage('hfoqo_completed_theme_history', completedThemeHistory)).map(String).filter(id => String(id).startsWith('topic:')));
@@ -7667,23 +8199,39 @@
                 }, 45000);
               } catch (resetErr) {
                 const errMsg = String(resetErr?.message || resetErr || '');
-                if (scope === 'aulas_videos' && /não reconhecido|nao reconhecido/i.test(errMsg)) {
+                if ((scope === 'aulas_videos' || scope === 'flashcards') && /não reconhecido|nao reconhecido/i.test(errMsg)) {
                   const resetAt = new Date().toISOString();
-                  const preservedPdfs = normalizeAulasProgress(aulasProgress).pdfs;
-                  const clearedAulas = normalizeAulasProgress({ videos: {}, pdfs: preservedPdfs, quizzes: {}, lastOpened: null });
                   const snapshot = buildCloudSyncSnapshot();
-                  snapshot.aulasVideosResetAt = resetAt;
-                  snapshot.storage = {
-                    ...(snapshot.storage || {}),
-                    hfoqo_aulas_progress_v1: JSON.stringify(clearedAulas),
-                    hfoqo_aulas_videos_reset_at: resetAt
-                  };
-                  snapshot.appState = {
-                    ...(snapshot.appState || {}),
-                    aulasProgress: clearedAulas
-                  };
-                  const saved = await callCloudSyncApi('saveUserSyncState', { userId: progressUserId, data: snapshot }, 45000);
-                  result = { ok: true, scope, userId: progressUserId, aulasVideosResetAt: resetAt, sync: saved };
+                  if (scope === 'flashcards') {
+                    const clearedFc = normalizeFlashcardsProgress({ resetAt });
+                    snapshot.flashcardsResetAt = resetAt;
+                    snapshot.storage = {
+                      ...(snapshot.storage || {}),
+                      [FLASHCARDS_PROGRESS_KEY]: JSON.stringify(clearedFc),
+                      hfoqo_flashcards_reset_at: resetAt
+                    };
+                    snapshot.appState = {
+                      ...(snapshot.appState || {}),
+                      flashcardsProgress: clearedFc
+                    };
+                    const saved = await callCloudSyncApi('saveUserSyncState', { userId: progressUserId, data: snapshot }, 45000);
+                    result = { ok: true, scope, userId: progressUserId, flashcardsResetAt: resetAt, sync: saved };
+                  } else {
+                    const preservedPdfs = normalizeAulasProgress(aulasProgress).pdfs;
+                    const clearedAulas = normalizeAulasProgress({ videos: {}, pdfs: preservedPdfs, quizzes: {}, lastOpened: null });
+                    snapshot.aulasVideosResetAt = resetAt;
+                    snapshot.storage = {
+                      ...(snapshot.storage || {}),
+                      hfoqo_aulas_progress_v1: JSON.stringify(clearedAulas),
+                      hfoqo_aulas_videos_reset_at: resetAt
+                    };
+                    snapshot.appState = {
+                      ...(snapshot.appState || {}),
+                      aulasProgress: clearedAulas
+                    };
+                    const saved = await callCloudSyncApi('saveUserSyncState', { userId: progressUserId, data: snapshot }, 45000);
+                    result = { ok: true, scope, userId: progressUserId, aulasVideosResetAt: resetAt, sync: saved };
+                  }
                   usedFallbackSave = true;
                 } else {
                   throw resetErr;
@@ -7692,6 +8240,7 @@
 
               if (scope === 'all') {
                 const resetAt = String(result?.resetAt || new Date().toISOString());
+                const emptyFc = normalizeFlashcardsProgress({ resetAt });
                 const emptyStorage = {
                   hfoqo_completed_questions: '[]',
                   hfoqo_completed_immersao_questions: '[]',
@@ -7705,6 +8254,8 @@
                   hfoqo_limbo_selections: '{}',
                   hfoqo_active_round_v1: 'null',
                   hfoqo_round_results_v2: '{}',
+                  [FLASHCARDS_PROGRESS_KEY]: JSON.stringify(emptyFc),
+                  hfoqo_flashcards_reset_at: resetAt,
                   hfoqo_progress_reset_at: resetAt
                 };
                 try {
@@ -7742,6 +8293,8 @@
                 setLimboSelections({});
                 setDailyPlan({date: today, themes: {}});
                 setActiveRound(null);
+                setFlashcardsProgress(emptyFc);
+                setFlashcardSessionActive(false);
                 setQuestionQueue([]);
                 setQuestionIndex(0);
                 setQuestionMode('trilha');
@@ -7787,6 +8340,40 @@
                 if (!usedFallbackSave) {
                   window.setTimeout(() => cloudSyncFunctionsRef.current.saveNow?.(), 700);
                 }
+              } else if (scope === 'flashcards') {
+                const resetAt = String(result?.flashcardsResetAt || new Date().toISOString());
+                const clearedFc = normalizeFlashcardsProgress({ resetAt });
+                try {
+                  localStorage.setItem(FLASHCARDS_PROGRESS_KEY, JSON.stringify(clearedFc));
+                  localStorage.setItem('hfoqo_flashcards_reset_at', resetAt);
+                  if (usedFallbackSave) {
+                    const snap = buildCloudSyncSnapshot();
+                    const savedBaseline = {
+                      ...snap,
+                      flashcardsResetAt: resetAt,
+                      storage: {
+                        ...(snap.storage || {}),
+                        [FLASHCARDS_PROGRESS_KEY]: JSON.stringify(clearedFc),
+                        hfoqo_flashcards_reset_at: resetAt
+                      },
+                      appState: {
+                        ...(snap.appState || {}),
+                        flashcardsProgress: clearedFc
+                      },
+                      updatedAt: String(result?.sync?.updatedAt || resetAt)
+                    };
+                    cloudSyncBaselineRef.current = savedBaseline;
+                    localStorage.setItem(HZ_SYNC_BASELINE_KEY, JSON.stringify(savedBaseline));
+                  } else {
+                    localStorage.removeItem(HZ_SYNC_BASELINE_KEY);
+                    cloudSyncBaselineRef.current = null;
+                  }
+                } catch (storageError) { console.warn('Limpeza local dos flashcards:', storageError); }
+                setFlashcardsProgress(clearedFc);
+                setFlashcardSessionActive(false);
+                if (!usedFallbackSave) {
+                  window.setTimeout(() => cloudSyncFunctionsRef.current.saveNow?.(), 700);
+                }
               } else {
                 // Não recarregar o esquema legado aqui: getState não contém questionStates
                 // e poderia zerar/ressuscitar estados locais. O endpoint já atualizou o snapshot remoto.
@@ -7808,7 +8395,9 @@
                   ? `Métricas resetadas. Respostas removidas: ${removed.answers || 0}.`
                   : scope === 'aulas_videos'
                     ? 'Progresso dos vídeos resetado com sucesso. Todas as videoaulas da Imersão voltaram para 0% (não iniciadas), como no primeiro acesso. Suas questões, resumos e marcações em PDFs foram preservados.'
-                    : 'Histórico geral zerado. Questões concluídas, temas históricos, Desafio Diário, Limbo, respostas e rodadas ativas foram limpos. Suas anotações pessoais da Biblioteca foram preservadas.';
+                    : scope === 'flashcards'
+                      ? 'Progresso dos flashcards resetado com sucesso. Todos os flashcards voltaram para revisão inicial.'
+                      : 'Histórico geral zerado. Questões concluídas, temas históricos, Desafio Diário, Limbo, Flashcards, respostas e rodadas ativas foram limpos. Suas anotações pessoais da Biblioteca foram preservadas.';
               window.alert(msg);
               return result;
             } catch (e) {
@@ -8307,6 +8896,18 @@
                         className="w-full py-3 rounded-xl border border-purple-300/50 bg-purple-500/10 text-purple-600 dark:text-purple-300 font-bold text-sm text-left px-4"
                       >
                         🎬 Resetar progresso dos vídeos
+                      </button>
+                      <button
+                        type="button"
+                        data-reset-flashcards-btn="1"
+                        onClick={() => {
+                          if (window.confirm('Resetar todo o progresso dos Flashcards? Os cards marcados como "Já sei" voltarão a aparecer normalmente.')) {
+                            resetProgress('flashcards');
+                          }
+                        }}
+                        className="w-full py-3 rounded-xl border border-emerald-300/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 font-bold text-sm text-left px-4"
+                      >
+                        🃏 Resetar progresso dos flashcards
                       </button>
                       <button type="button" onClick={() => { if (window.confirm('Resetar TODO o histórico geral? Esta ação limpa o progresso salvo, respostas, Limbo e Desafios.')) resetProgress('all'); }} className="w-full py-3 rounded-xl border border-red-300/50 bg-red-500/10 text-red-600 dark:text-red-300 font-bold text-sm text-left px-4">⚠ Resetar todo histórico geral</button>
                     </div>
@@ -9543,13 +10144,14 @@
 
             const menuItems = [
               { id: 'trilha', label: 'Trilha de questões', icon: <Icons.Book /> },
-              { id: 'limbo', label: 'Limbo de questões', icon: <Icons.Layers /> },
-              { id: 'desafio', label: 'Desafios diários', icon: <Icons.Target />, locked: desafioLocked, lockReason: desafioLockReason },
-              { id: 'imersoes', label: 'Banco BQHZ', icon: <Icons.Database /> },
               { id: 'aulas', label: 'Imersão', icon: <Icons.Play /> },
+              { id: 'desafio', label: 'Desafios diários', icon: <Icons.Target />, locked: desafioLocked, lockReason: desafioLockReason },
+              { id: 'flashcards', label: 'Flashcards', icon: <Icons.Flashcard /> },
+              { id: 'limbo', label: 'Limbo de questões', icon: <Icons.Layers /> },
+              { id: 'biblioteca', label: 'Biblioteca de Resumos', icon: <Icons.Archive /> },
               { id: 'metricas', label: 'Métricas', icon: <Icons.BarChart /> },
               { id: 'diagnostico', label: 'Diagnóstico', icon: <Icons.Target /> },
-              { id: 'biblioteca', label: 'Biblioteca de Resumos', icon: <Icons.Archive /> },
+              { id: 'imersoes', label: 'Banco BQHZ', icon: <Icons.Database /> },
             ];
 
             return (
@@ -9595,6 +10197,1360 @@
                     )}
                   </button>
                 ))}
+              </div>
+            );
+          };
+
+          const FlashcardsView = () => {
+            const pad2 = (n) => String(Math.max(0, Number(n) || 0)).padStart(2, '0');
+            const [subScreen, setSubScreen] = useState('list'); // list | summary | study | done
+            const [listTab, setListTab] = useState('today'); // today | done
+            const [selectedSpec, setSelectedSpec] = useState('all');
+            const [searchTerm, setSearchTerm] = useState('');
+            const [activeThemeKey, setActiveThemeKey] = useState(null);
+            const [studyReturnScreen, setStudyReturnScreen] = useState('list');
+            const [studyCustomTitle, setStudyCustomTitle] = useState('');
+            const [showDailyStats, setShowDailyStats] = useState(false);
+
+            const [queueIds, setQueueIds] = useState([]);
+            const [cardIndex, setCardIndex] = useState(0);
+            const [sessionResults, setSessionResults] = useState({});
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [showHint, setShowHint] = useState(false);
+            const [showDeckOverview, setShowDeckOverview] = useState(false);
+            const [showExitModal, setShowExitModal] = useState(false);
+            const [dragX, setDragX] = useState(0);
+            const [isDragging, setIsDragging] = useState(false);
+            const [flyOut, setFlyOut] = useState(null);
+
+            const dragStateRef = React.useRef({
+              active: false,
+              lockedHorizontal: false,
+              moved: false,
+              startX: 0,
+              startY: 0,
+              currentX: 0,
+              pointerId: null
+            });
+            const skipNextClickRef = React.useRef(false);
+            const advanceTimerRef = React.useRef(null);
+            const frontScrollRef = React.useRef(null);
+            const backScrollRef = React.useRef(null);
+
+            useEffect(() => {
+              setFlashcardSessionActive(subScreen === 'study');
+              return () => setFlashcardSessionActive(false);
+            }, [subScreen]);
+
+            useEffect(() => () => {
+              if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+            }, []);
+
+            const cardById = React.useMemo(() => {
+              const map = {};
+              (flashcardsCatalog || []).forEach(c => { map[c.id] = c; });
+              return map;
+            }, [flashcardsCatalog]);
+
+            const masteredSet = React.useMemo(
+              () => new Set(flashcardsProgress?.masteredIds || []),
+              [flashcardsProgress?.masteredIds]
+            );
+            const wrongSet = React.useMemo(
+              () => new Set(flashcardsProgress?.wrongIds || []),
+              [flashcardsProgress?.wrongIds]
+            );
+
+            const themeGroups = React.useMemo(() => {
+              const map = new Map();
+              (flashcardsCatalog || []).forEach(card => {
+                const key = card.themeKey || `${normalizeFlashcardText(card.specialty)}::${normalizeFlashcardText(card.theme)}`;
+                if (!map.has(key)) {
+                  map.set(key, {
+                    themeKey: key,
+                    specialty: card.specialty,
+                    theme: card.theme,
+                    specMeta: getFlashcardSpecialtyMeta(card.specialty),
+                    cards: []
+                  });
+                }
+                map.get(key).cards.push(card);
+              });
+              return Array.from(map.values()).map(group => {
+                const cardIds = group.cards.map(c => c.id);
+                const total = group.cards.length;
+                const masteredCount = cardIds.filter(id => masteredSet.has(id)).length;
+                const wrongIdsInTheme = cardIds.filter(id => !masteredSet.has(id) && wrongSet.has(id));
+                const rawSession = flashcardsProgress?.themeSessions?.[group.themeKey] || null;
+                const validQueue = rawSession && Array.isArray(rawSession.queueIds)
+                  ? rawSession.queueIds.filter(id => cardIds.includes(id))
+                  : [];
+                const pausedSession = validQueue.length > 0 && rawSession.index < validQueue.length
+                  ? { ...rawSession, queueIds: validQueue, index: Math.max(0, Math.min(validQueue.length - 1, Number(rawSession.index || 0))) }
+                  : null;
+                const pct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
+                const isCompleted = total > 0 && masteredCount >= total;
+                return {
+                  ...group,
+                  cardIds,
+                  total,
+                  masteredCount,
+                  wrongIdsInTheme,
+                  pausedSession,
+                  pct,
+                  isCompleted
+                };
+              }).sort((a, b) => {
+                const aActive = a.pausedSession ? 0 : (a.wrongIdsInTheme.length > 0 ? 1 : 2);
+                const bActive = b.pausedSession ? 0 : (b.wrongIdsInTheme.length > 0 ? 1 : 2);
+                if (aActive !== bActive) return aActive - bActive;
+                return a.theme.localeCompare(b.theme, 'pt-BR');
+              });
+            }, [flashcardsCatalog, masteredSet, wrongSet, flashcardsProgress?.themeSessions]);
+
+            const specialtyFilters = React.useMemo(() => {
+              const seen = new Map();
+              themeGroups.forEach(g => {
+                if (!seen.has(g.specMeta.label)) {
+                  seen.set(g.specMeta.label, g.specMeta);
+                }
+              });
+              return Array.from(seen.values());
+            }, [themeGroups]);
+
+            const todayThemes = React.useMemo(() => themeGroups.filter(g => !g.isCompleted), [themeGroups]);
+            const doneThemes = React.useMemo(() => themeGroups.filter(g => g.isCompleted), [themeGroups]);
+            const limboGroups = React.useMemo(() => themeGroups.filter(g => g.wrongIdsInTheme.length > 0), [themeGroups]);
+            const limboCardIds = React.useMemo(() => limboGroups.flatMap(g => g.wrongIdsInTheme), [limboGroups]);
+
+            const visibleThemes = React.useMemo(() => {
+              const base = listTab === 'done' ? doneThemes : todayThemes;
+              const q = normalizeFlashcardText(searchTerm);
+              return base.filter(g => {
+                if (selectedSpec !== 'all' && g.specMeta.label !== selectedSpec) return false;
+                if (q && !normalizeFlashcardText(`${g.theme} ${g.specialty} ${g.specMeta.badgeCode}`).includes(q)) return false;
+                return true;
+              });
+            }, [listTab, doneThemes, todayThemes, selectedSpec, searchTerm]);
+
+            const todayDateKey = localDateKey();
+            const todayStat = flashcardsProgress?.dailyStats?.[todayDateKey] || { done: 0, hits: 0, misses: 0 };
+            const totalPendingCards = todayThemes.reduce((acc, g) => acc + Math.max(0, g.total - g.masteredCount), 0);
+            const dailyTarget = flashcardsProgress?.dailyGoal > 0 ? flashcardsProgress.dailyGoal : totalPendingCards;
+
+            const activeGroup = React.useMemo(
+              () => themeGroups.find(g => g.themeKey === activeThemeKey) || null,
+              [themeGroups, activeThemeKey]
+            );
+
+            const resetCardInteractionState = () => {
+              if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+              setIsFlipped(false);
+              setShowHint(false);
+              setDragX(0);
+              setIsDragging(false);
+              setFlyOut(null);
+              dragStateRef.current.active = false;
+              dragStateRef.current.lockedHorizontal = false;
+              dragStateRef.current.moved = false;
+              dragStateRef.current.currentX = 0;
+            };
+
+            const openThemeSummary = (group) => {
+              if (!group) return;
+              resetCardInteractionState();
+              setActiveThemeKey(group.themeKey);
+              setStudyReturnScreen('list');
+              setStudyCustomTitle('');
+              setSubScreen('summary');
+            };
+
+            const startLimboRound = (ids, label = 'Limbo dos Flashcards', themeKey = null) => {
+              const validIds = (Array.isArray(ids) ? ids : []).filter(id => Boolean(cardById[id]));
+              if (!validIds.length) return;
+              resetCardInteractionState();
+              setActiveThemeKey(themeKey);
+              setStudyReturnScreen('limbo');
+              setStudyCustomTitle(label);
+              setShowDeckOverview(false);
+              setShowExitModal(false);
+              setQueueIds(validIds);
+              setCardIndex(0);
+              setSessionResults({});
+              setSubScreen('study');
+            };
+
+            const startStudyRound = (group, forceRestartAll = false) => {
+              if (!group || !group.cards.length) return;
+              resetCardInteractionState();
+              setActiveThemeKey(group.themeKey);
+              setStudyReturnScreen('list');
+              setStudyCustomTitle('');
+              setShowDeckOverview(false);
+              setShowExitModal(false);
+
+              if (!forceRestartAll && group.pausedSession && group.pausedSession.queueIds.length > 0) {
+                setQueueIds(group.pausedSession.queueIds);
+                setCardIndex(group.pausedSession.index);
+                setSessionResults(group.pausedSession.results || {});
+                setSubScreen('study');
+                return;
+              }
+
+              if (forceRestartAll) {
+                resetFlashcardThemeProgress(group.themeKey, group.cardIds);
+                const allIds = group.cards.map(c => c.id);
+                setQueueIds(allIds);
+                setCardIndex(0);
+                setSessionResults({});
+                saveFlashcardSessionCheckpoint(group.themeKey, { queueIds: allIds, index: 0, results: {} });
+                setSubScreen('study');
+                return;
+              }
+
+              // Prioriza cards errados na última tentativa, seguidos pelos ainda não dominados
+              const wrongFirst = group.cards.filter(c => !masteredSet.has(c.id) && wrongSet.has(c.id)).map(c => c.id);
+              const wrongFirstSet = new Set(wrongFirst);
+              const untouched = group.cards.filter(c => !masteredSet.has(c.id) && !wrongFirstSet.has(c.id)).map(c => c.id);
+              const nextQueue = [...wrongFirst, ...untouched];
+              const finalQueue = nextQueue.length ? nextQueue : group.cards.map(c => c.id);
+              setQueueIds(finalQueue);
+              setCardIndex(0);
+              setSessionResults({});
+              saveFlashcardSessionCheckpoint(group.themeKey, { queueIds: finalQueue, index: 0, results: {} });
+              setSubScreen('study');
+            };
+
+            const activeQueueCards = React.useMemo(
+              () => queueIds.map(id => cardById[id]).filter(Boolean),
+              [queueIds, cardById]
+            );
+            const currentCard = activeQueueCards[cardIndex] || null;
+            const nextCard = activeQueueCards[cardIndex + 1] || null;
+
+            const fitFlashcardFaces = React.useCallback(() => {
+              const fitFace = (el, scaleVar, minScale = 0.72) => {
+                if (!el) return;
+                el.style.setProperty(scaleVar, '1');
+                if (el.clientHeight <= 0) return;
+                let scale = 1;
+                let step = 0;
+                while (step < 8 && scale > minScale && el.scrollHeight > el.clientHeight + 2) {
+                  scale = Math.max(minScale, Number((scale - 0.04).toFixed(2)));
+                  el.style.setProperty(scaleVar, String(scale));
+                  step++;
+                }
+              };
+              fitFace(frontScrollRef.current, '--fc-front-scale', 0.72);
+              fitFace(backScrollRef.current, '--fc-back-scale', 0.72);
+            }, []);
+
+            useEffect(() => {
+              if (subScreen !== 'study' || !currentCard) return undefined;
+              let raf2 = 0;
+              const raf1 = window.requestAnimationFrame(() => {
+                fitFlashcardFaces();
+                raf2 = window.requestAnimationFrame(fitFlashcardFaces);
+              });
+              window.addEventListener('resize', fitFlashcardFaces);
+              return () => {
+                window.cancelAnimationFrame(raf1);
+                if (raf2) window.cancelAnimationFrame(raf2);
+                window.removeEventListener('resize', fitFlashcardFaces);
+              };
+            }, [subScreen, currentCard?.id, isFlipped, showHint, fitFlashcardFaces]);
+
+            const commitSwipeOutcome = (outcome) => {
+              if (!currentCard || flyOut) return;
+              const direction = outcome === 'hit' ? 'right' : 'left';
+              setFlyOut(direction);
+              setIsDragging(false);
+
+              const isLimboStudy = studyReturnScreen === 'limbo';
+              const nextResults = { ...sessionResults, [currentCard.id]: outcome };
+              const nextIndex = cardIndex + 1;
+              const hasMore = nextIndex < activeQueueCards.length;
+              const nextSessionPayload = (!isLimboStudy && hasMore)
+                ? {
+                    queueIds: activeQueueCards.map(c => c.id),
+                    index: nextIndex,
+                    results: nextResults,
+                    updatedAt: new Date().toISOString()
+                  }
+                : null;
+
+              recordFlashcardDecision(
+                currentCard.id,
+                outcome,
+                isLimboStudy ? null : (activeGroup?.themeKey || activeThemeKey),
+                isLimboStudy ? null : nextSessionPayload
+              );
+              setSessionResults(nextResults);
+
+              if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+              advanceTimerRef.current = window.setTimeout(() => {
+                setDragX(0);
+                setFlyOut(null);
+                setIsFlipped(false);
+                setShowHint(false);
+                dragStateRef.current.active = false;
+                dragStateRef.current.lockedHorizontal = false;
+                dragStateRef.current.moved = false;
+                dragStateRef.current.currentX = 0;
+                if (hasMore) {
+                  setCardIndex(nextIndex);
+                } else {
+                  setSubScreen('done');
+                }
+              }, 200);
+            };
+
+            const handleSaveAndExitStudy = () => {
+              if (studyReturnScreen !== 'limbo' && activeGroup?.themeKey && activeQueueCards.length > 0) {
+                saveFlashcardSessionCheckpoint(activeGroup.themeKey, {
+                  queueIds: activeQueueCards.map(c => c.id),
+                  index: cardIndex,
+                  results: sessionResults
+                });
+              }
+              setShowExitModal(false);
+              resetCardInteractionState();
+              setSubScreen(studyReturnScreen === 'limbo' ? 'limbo' : 'list');
+            };
+
+            const handleBackClickInStudy = () => {
+              const answeredCount = Object.keys(sessionResults).length;
+              if (answeredCount > 0 || cardIndex > 0) {
+                setShowExitModal(true);
+              } else {
+                resetCardInteractionState();
+                setSubScreen(studyReturnScreen === 'limbo' ? 'limbo' : 'summary');
+              }
+            };
+
+            useEffect(() => {
+              if (subScreen !== 'study') return undefined;
+              const onMove = (ev) => {
+                const st = dragStateRef.current;
+                if (!st.active) return;
+                const dx = ev.clientX - st.startX;
+                const dy = ev.clientY - st.startY;
+                if (!st.lockedHorizontal) {
+                  if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+                  if (Math.abs(dx) > Math.abs(dy) * 1.15) {
+                    st.lockedHorizontal = true;
+                    st.moved = true;
+                    setIsDragging(true);
+                  } else {
+                    // Movimento vertical: permite rolar o conceito-chave normalmente
+                    st.active = false;
+                    return;
+                  }
+                }
+                if (ev.cancelable) ev.preventDefault();
+                st.currentX = dx;
+                setDragX(dx);
+              };
+              const onUp = () => {
+                const st = dragStateRef.current;
+                if (!st.active) return;
+                const wasHorizontal = st.lockedHorizontal;
+                const finalX = st.currentX;
+                st.active = false;
+                st.lockedHorizontal = false;
+                setIsDragging(false);
+                if (wasHorizontal) {
+                  skipNextClickRef.current = true;
+                  window.setTimeout(() => { skipNextClickRef.current = false; }, 120);
+                  if (Math.abs(finalX) >= 95 && isFlipped && !flyOut) {
+                    commitSwipeOutcome(finalX > 0 ? 'hit' : 'miss');
+                  } else {
+                    setDragX(0);
+                  }
+                }
+              };
+              window.addEventListener('pointermove', onMove, { passive: false });
+              window.addEventListener('pointerup', onUp);
+              window.addEventListener('pointercancel', onUp);
+              return () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                window.removeEventListener('pointercancel', onUp);
+              };
+            }, [subScreen, isFlipped, flyOut, currentCard, cardIndex, activeQueueCards, sessionResults]);
+
+            const handleCardPointerDown = (e) => {
+              if (!isFlipped || flyOut) return;
+              if (e.button && e.button !== 0) return;
+              dragStateRef.current = {
+                active: true,
+                lockedHorizontal: false,
+                moved: false,
+                startX: e.clientX,
+                startY: e.clientY,
+                currentX: 0,
+                pointerId: e.pointerId
+              };
+            };
+
+            const handleCardClick = () => {
+              if (skipNextClickRef.current || isDragging || flyOut) return;
+              setIsFlipped(prev => {
+                if (prev) setShowHint(false);
+                return !prev;
+              });
+            };
+
+            const handleForceFinishTheme = (group) => {
+              if (!group) return;
+              if (!window.confirm(`Forçar finalização de "${group.theme}"? Todos os flashcards deste tema serão marcados como dominados e irão para "Feitos".`)) return;
+              forceFinishFlashcardTheme(group.themeKey, group.cardIds);
+              if (subScreen !== 'list') {
+                resetCardInteractionState();
+                setSubScreen('list');
+              }
+            };
+
+            // ------------------------------------------------------------------
+            // SUBTELA 3: ESTUDO ATIVO (Frente / Verso / Arraste / Modal Sair)
+            // ------------------------------------------------------------------
+            if (subScreen === 'study' && currentCard) {
+              const specMeta = getFlashcardSpecialtyMeta(currentCard.specialty);
+              const nextSpecMeta = nextCard ? getFlashcardSpecialtyMeta(nextCard.specialty) : specMeta;
+              const progressPct = Math.round(((cardIndex + (flyOut ? 1 : 0)) / Math.max(1, activeQueueCards.length)) * 100);
+              const swipeRatio = Math.min(1, Math.abs(dragX) / 110);
+              const rightOverlayOpacity = flyOut === 'right' ? 0.94 : (dragX > 10 ? swipeRatio * 0.92 : 0);
+              const leftOverlayOpacity = flyOut === 'left' ? 0.94 : (dragX < -10 ? swipeRatio * 0.92 : 0);
+
+              let cardTransform = 'translateX(0px) translateY(0px) rotate(0deg)';
+              if (flyOut === 'right') cardTransform = 'translateX(540px) translateY(28px) rotate(18deg)';
+              else if (flyOut === 'left') cardTransform = 'translateX(-540px) translateY(28px) rotate(-18deg)';
+              else if (dragX !== 0) cardTransform = `translateX(${dragX}px) translateY(${Math.abs(dragX) * 0.08}px) rotate(${dragX * 0.055}deg)`;
+
+              const answeredInSession = Object.keys(sessionResults).length;
+              const exitCompletedDisplay = Math.max(answeredInSession, cardIndex);
+
+              const qLen = (currentCard.question || '').length;
+              const frontBasePx = qLen <= 110 ? 20 : (qLen <= 220 ? 18 : 16);
+              const backTotalLen = (currentCard.answerText || '').length + (currentCard.concept || '').length;
+              const ansBasePx = backTotalLen <= 180 ? 18.5 : (backTotalLen <= 380 ? 17 : (backTotalLen <= 600 ? 15.5 : 14.5));
+              const conBasePx = backTotalLen <= 180 ? 14.5 : (backTotalLen <= 380 ? 13.5 : (backTotalLen <= 600 ? 12.5 : 11.5));
+
+              return (
+                <div className={`h-full w-full flex flex-col justify-between overflow-hidden ${isDark ? 'bg-[#121212] text-white' : 'bg-[#F4F1EA] text-gray-900'}`}>
+                  {/* Barra Superior */}
+                  <div className="max-w-2xl w-full mx-auto px-3 sm:px-5 pt-2.5 sm:pt-3 flex items-center gap-2.5 sm:gap-3 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleBackClickInStudy}
+                      aria-label="Voltar ou salvar sessão"
+                      className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition ${isDark ? 'bg-[#1e1e1e] border-[#333] text-gray-200 hover:bg-[#2a2a2a]' : 'bg-white border-gray-200 text-gray-800 shadow-sm hover:bg-gray-50'}`}
+                    >
+                      <Icons.ChevronLeft />
+                    </button>
+
+                    <div className={`flex-1 h-7 rounded-full relative overflow-hidden ${isDark ? 'bg-[#2a2a2a]' : 'bg-gray-400/55'}`}>
+                      <div
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.max(4, progressPct)}%`,
+                          background: 'linear-gradient(90deg, #7c3aed, #4f46e5)'
+                        }}
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold tracking-wide text-white drop-shadow">
+                        Flashcard {pad2(Math.min(cardIndex + 1, activeQueueCards.length))}/{pad2(activeQueueCards.length)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowDeckOverview(true)}
+                      aria-label="Visão geral dos flashcards"
+                      className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 transition ${isDark ? 'bg-[#1e1e1e] border-[#333] text-gray-200 hover:bg-[#2a2a2a]' : 'bg-white border-gray-200 text-gray-800 shadow-sm hover:bg-gray-50'}`}
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                        <rect x="2" y="2" width="4.5" height="4.5" rx="1" />
+                        <rect x="9.5" y="2" width="4.5" height="4.5" rx="1" />
+                        <rect x="2" y="9.5" width="4.5" height="4.5" rx="1" />
+                        <rect x="9.5" y="9.5" width="4.5" height="4.5" rx="1" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Palco Central do Baralho */}
+                  <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-4 py-1.5 overflow-hidden">
+                    <div className="relative w-[min(88vw,380px)] h-[min(78dvh,610px)] select-none">
+                      {/* Próximo card visível atrás ao arrastar */}
+                      {nextCard && (
+                        <div
+                          className={`absolute inset-0 rounded-[26px] shadow-lg transition-transform duration-200 flex items-center justify-center p-7 ${
+                            isDark ? 'bg-[#141414] text-white/85' : 'bg-[#F6F2E9] text-[#111827]'
+                          }`}
+                          style={{
+                            transform: (Math.abs(dragX) > 6 || flyOut) ? 'scale(0.985)' : 'scale(0.96)',
+                            opacity: (Math.abs(dragX) > 6 || flyOut) ? 1 : 0.65
+                          }}
+                        >
+                          <div
+                            className="absolute inset-2.5 rounded-[18px] border pointer-events-none"
+                            style={{ borderColor: nextSpecMeta.accent }}
+                          />
+                          <div
+                            className="absolute top-5 right-5 w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold opacity-75"
+                            style={{ borderColor: nextSpecMeta.accent, color: nextSpecMeta.accent }}
+                          >
+                            {nextCard.hasOptions ? '?' : '•'}
+                          </div>
+                          <p className={`text-sm sm:text-base font-medium leading-relaxed text-center line-clamp-5 ${isDark ? 'text-gray-200' : 'text-[#111827]'}`}>
+                            {nextCard.question}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Card ativo com flip 3D + drag */}
+                      <div
+                        key={currentCard.id}
+                        onPointerDown={handleCardPointerDown}
+                        onClick={handleCardClick}
+                        style={{
+                          perspective: '1200px',
+                          transform: cardTransform,
+                          transition: isDragging ? 'none' : 'transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)',
+                          touchAction: isFlipped ? 'pan-y' : 'manipulation'
+                        }}
+                        className="relative w-full h-full cursor-pointer"
+                      >
+                        <div
+                          style={{
+                            transformStyle: 'preserve-3d',
+                            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                            transition: 'transform 0.52s cubic-bezier(0.22, 1, 0.36, 1)'
+                          }}
+                          className="relative w-full h-full"
+                        >
+                          {/* FRENTE: PERGUNTA */}
+                          <div
+                            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+                            className={`absolute inset-0 rounded-[26px] shadow-xl flex flex-col justify-between p-5 sm:p-6 overflow-hidden ${
+                              isDark ? 'bg-[#111111] text-white' : 'bg-[#F6F2E9] text-[#111827]'
+                            }`}
+                          >
+                            <div
+                              className="absolute inset-2.5 rounded-[18px] border pointer-events-none"
+                              style={{ borderColor: specMeta.accent }}
+                            />
+
+                            {/* Topo: badge sutil do tema + ícone ? quando houver 2 alternativas */}
+                            <div className="relative z-10 flex items-center justify-between gap-2 pt-1 px-1 shrink-0">
+                              <span
+                                className="text-[11px] font-bold px-2.5 py-0.5 rounded-full truncate max-w-[230px]"
+                                style={{
+                                  backgroundColor: specMeta.badgeBg,
+                                  color: isDark ? specMeta.badgeTextDark : specMeta.badgeTextLight
+                                }}
+                              >
+                                {specMeta.badgeCode} · {currentCard.theme}
+                              </span>
+                              {currentCard.hasOptions && (
+                                <button
+                                  type="button"
+                                  data-fc-hint-btn="1"
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowHint(prev => !prev);
+                                  }}
+                                  title="Ver as 2 alternativas para ajudar a lembrar"
+                                  aria-label="Ver duas alternativas de dica"
+                                  aria-expanded={showHint}
+                                  className="w-8 h-8 rounded-full border flex items-center justify-center text-sm font-bold shrink-0 transition hover:scale-105"
+                                  style={{
+                                    borderColor: specMeta.accent,
+                                    color: specMeta.accent,
+                                    backgroundColor: showHint ? specMeta.badgeBg : 'transparent'
+                                  }}
+                                >
+                                  ?
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Centro: Pergunta (sem justify-center no scroll para nunca cortar topo/rodapé) */}
+                            <div
+                              ref={frontScrollRef}
+                              style={{ '--fc-front-base': `${frontBasePx}px`, '--fc-front-scale': 1 }}
+                              className="relative z-10 flex-1 min-h-0 overflow-y-auto px-2 py-1.5 flex flex-col"
+                            >
+                              <div className="my-auto py-1">
+                                <p
+                                  style={{ fontSize: 'calc(var(--fc-front-base, 18px) * var(--fc-front-scale, 1))' }}
+                                  className={`font-medium leading-relaxed text-center whitespace-pre-line ${isDark ? 'text-white' : 'text-[#111827]'}`}
+                                >
+                                  {currentCard.question}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Dica de 2 alternativas (somente ao clicar no ?) */}
+                            {showHint && currentCard.hasOptions ? (
+                              <div
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                                className={`relative z-20 shrink-0 rounded-xl p-3 border text-left space-y-1.5 shadow-sm ${
+                                  isDark ? 'bg-[#1c1c1e] border-[#383838] text-gray-100' : 'bg-white border-gray-300 text-[#111827]'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider opacity-75">
+                                  <span>Alternativas (dica)</span>
+                                  <button type="button" onClick={() => setShowHint(false)} className="underline">Ocultar</button>
+                                </div>
+                                <div className="text-xs leading-snug"><b>1)</b> {currentCard.option1}</div>
+                                <div className="text-xs leading-snug"><b>2)</b> {currentCard.option2}</div>
+                              </div>
+                            ) : (
+                              <div className="relative z-10 pt-2 px-1 shrink-0">
+                                <div className="h-[1px] w-full mb-2 opacity-40" style={{ backgroundColor: specMeta.accent }} />
+                                <div className={`text-xs font-medium flex items-center justify-between ${isDark ? 'text-gray-300' : 'text-[#111827]'}`}>
+                                  <span>{currentCard.specialty}</span>
+                                  {currentCard.hasOptions && <span className="opacity-65 text-[11px]">Toque em ? p/ dicas</span>}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* VERSO: RESPOSTA + CONCEITO-CHAVE (sempre claro com letra preta) */}
+                          <div
+                            style={{
+                              backfaceVisibility: 'hidden',
+                              WebkitBackfaceVisibility: 'hidden',
+                              transform: 'rotateY(180deg)'
+                            }}
+                            className="absolute inset-0 rounded-[26px] shadow-xl bg-[#F7F4EC] text-[#111827] flex flex-col justify-between p-5 sm:p-6 overflow-hidden"
+                          >
+                            <div
+                              className="absolute inset-2.5 rounded-[18px] border pointer-events-none z-10"
+                              style={{ borderColor: specMeta.accent }}
+                            />
+
+                            {/* Topo Verso: label + check */}
+                            <div className="relative z-10 flex items-center justify-between pt-1 px-1 shrink-0">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                                Resposta correta
+                              </span>
+                              <span
+                                className="w-7 h-7 rounded-full border flex items-center justify-center text-xs font-black"
+                                style={{ borderColor: specMeta.accent, color: specMeta.accent }}
+                              >
+                                ✓
+                              </span>
+                            </div>
+
+                            {/* Corpo Verso: Resposta + Conceito-chave (com my-auto + auto-fit) */}
+                            <div
+                              ref={backScrollRef}
+                              style={{
+                                '--fc-ans-base': `${ansBasePx}px`,
+                                '--fc-con-base': `${conBasePx}px`,
+                                '--fc-back-scale': 1
+                              }}
+                              className="relative z-10 flex-1 min-h-0 overflow-y-auto px-1.5 py-1.5 flex flex-col"
+                            >
+                              <div className="my-auto flex flex-col gap-2.5 py-1">
+                                <p
+                                  style={{ fontSize: 'calc(var(--fc-ans-base, 17px) * var(--fc-back-scale, 1))' }}
+                                  className="font-semibold leading-snug text-[#111827] whitespace-pre-line"
+                                >
+                                  {currentCard.answerText || 'Resposta não informada.'}
+                                </p>
+                                {currentCard.concept && (
+                                  <div className="pt-2 border-t border-black/10">
+                                    <div className="text-[11px] font-black uppercase tracking-wider text-gray-600 mb-1">
+                                      Conceito-chave
+                                    </div>
+                                    <p
+                                      style={{ fontSize: 'calc(var(--fc-con-base, 13.5px) * var(--fc-back-scale, 1))' }}
+                                      className="leading-relaxed text-[#1f2937] whitespace-pre-line"
+                                    >
+                                      {currentCard.concept}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Rodapé Verso: linha colorida da especialidade + nome */}
+                            <div className="relative z-10 pt-2 px-1 shrink-0">
+                              <div className="h-[1px] w-full mb-2" style={{ backgroundColor: specMeta.accent }} />
+                              <div className="text-xs sm:text-sm font-medium text-[#111827]">
+                                {currentCard.specialty}
+                              </div>
+                            </div>
+
+                            {/* OVERLAY VERDE: ARRASTE PARA DIREITA (JÁ SEI) */}
+                            {rightOverlayOpacity > 0 && (
+                              <div
+                                style={{ backgroundColor: '#93d3a2', opacity: rightOverlayOpacity }}
+                                className="absolute inset-0 z-20 rounded-[26px] flex flex-col items-center justify-start pt-8 pointer-events-none transition-opacity"
+                              >
+                                <div className="text-white drop-shadow-sm">
+                                  <Icons.BookTrophy className="w-16 h-16" />
+                                </div>
+                                <span className="mt-2 px-3 py-1 rounded-full bg-white/25 text-white text-xs font-black uppercase tracking-wider">
+                                  Já sei
+                                </span>
+                              </div>
+                            )}
+
+                            {/* OVERLAY VERMELHO: ARRASTE PARA ESQUERDA (ERREI) */}
+                            {leftOverlayOpacity > 0 && (
+                              <div
+                                style={{ backgroundColor: '#cf6d68', opacity: leftOverlayOpacity }}
+                                className="absolute inset-0 z-20 rounded-[26px] flex flex-col items-center justify-start pt-8 pointer-events-none transition-opacity"
+                              >
+                                <div className="text-white drop-shadow-sm">
+                                  <Icons.BookHourglass className="w-16 h-16" />
+                                </div>
+                                <span className="mt-2 px-3 py-1 rounded-full bg-white/25 text-white text-xs font-black uppercase tracking-wider">
+                                  Errei · Repetir
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className={`mt-2 text-xs sm:text-sm font-medium text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {isFlipped ? 'Clique no flashcard para ver a pergunta · ou arraste para avaliar' : 'Clique no card para ver a resposta'}
+                    </p>
+                  </div>
+
+                  {/* Barra Inferior (Errei <- | -> Já sei) */}
+                  <div className={`h-14 shrink-0 border-t px-6 sm:px-12 flex items-center justify-between max-w-2xl w-full mx-auto transition-opacity ${
+                    isDark ? 'border-[#252525]' : 'border-gray-300/70'
+                  } ${isFlipped ? 'opacity-100' : 'opacity-35 pointer-events-none'}`}>
+                    <button
+                      type="button"
+                      data-fc-wrong-btn="1"
+                      disabled={!isFlipped || !!flyOut}
+                      onClick={() => commitSwipeOutcome('miss')}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[#c94a44] hover:bg-red-500/10 active:scale-95 transition"
+                      title="Errei (arraste para esquerda — repetirá na próxima abertura)"
+                    >
+                      <Icons.BookHourglass className="w-8 h-8" />
+                      <span className="text-xs font-black hidden sm:inline">Errei</span>
+                    </button>
+
+                    <span className={`text-[11px] font-semibold hidden sm:inline ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                      ← Errei · Arraste · Já sei →
+                    </span>
+
+                    <button
+                      type="button"
+                      data-fc-know-btn="1"
+                      disabled={!isFlipped || !!flyOut}
+                      onClick={() => commitSwipeOutcome('hit')}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[#229a56] hover:bg-emerald-500/10 active:scale-95 transition"
+                      title="Já sei (arraste para direita — não repete mais)"
+                    >
+                      <span className="text-xs font-black hidden sm:inline">Já sei</span>
+                      <Icons.BookTrophy className="w-8 h-8" />
+                    </button>
+                  </div>
+
+                  {/* MODAL VISÃO GERAL (::) */}
+                  {showDeckOverview && (
+                    <div className="fixed inset-0 z-[185000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowDeckOverview(false); }}>
+                      <div className={`w-full max-w-md rounded-3xl p-5 shadow-2xl border max-h-[80vh] flex flex-col ${isDark ? 'bg-[#1a1a1a] border-[#333] text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                        <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-[#333]">
+                          <div>
+                            <h3 className="font-black text-base">{activeGroup?.theme || 'Revisão'}</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{cardIndex + 1} de {activeQueueCards.length} nesta sessão</p>
+                          </div>
+                          <button type="button" onClick={() => setShowDeckOverview(false)} className="w-8 h-8 rounded-full bg-gray-200 dark:bg-[#2c2c2c] font-bold">×</button>
+                        </div>
+                        <div className="overflow-y-auto py-3 space-y-2 flex-1">
+                          {activeQueueCards.map((c, idx) => {
+                            const res = sessionResults[c.id];
+                            const isCurrent = idx === cardIndex;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  resetCardInteractionState();
+                                  setCardIndex(idx);
+                                  setShowDeckOverview(false);
+                                }}
+                                className={`w-full text-left p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                                  isCurrent
+                                    ? 'border-purple-500 bg-purple-500/10 font-bold'
+                                    : isDark ? 'border-[#2d2d2d] bg-[#222]' : 'border-gray-200 bg-gray-50'
+                                }`}
+                              >
+                                <span className="truncate">{pad2(idx + 1)}. {c.question}</span>
+                                <span className={`shrink-0 px-2 py-0.5 rounded-full font-bold ${
+                                  res === 'hit' ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                                  : res === 'miss' ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                                  : 'bg-gray-500/15 text-gray-500'
+                                }`}>
+                                  {res === 'hit' ? 'Já sei' : res === 'miss' ? 'Errei' : isCurrent ? 'Atual' : 'Pendente'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MODAL SAIR DA REVISÃO (Imagem 8) */}
+                  {showExitModal && (
+                    <div className="fixed inset-0 z-[190000] bg-black/55 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) setShowExitModal(false); }}>
+                      <div className={`w-full max-w-sm rounded-3xl p-6 shadow-2xl border relative text-center ${isDark ? 'bg-[#1c1c1c] border-[#333] text-white' : 'bg-[#F7F4EC] border-gray-200 text-[#111827]'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setShowExitModal(false)}
+                          aria-label="Fechar"
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold absolute top-4 right-4 ${isDark ? 'bg-[#333] text-gray-200' : 'bg-black/65 text-white'}`}
+                        >
+                          ×
+                        </button>
+                        <h3 className="text-base sm:text-lg font-semibold mt-4">
+                          Você já realizou {pad2(exitCompletedDisplay)}/{pad2(activeQueueCards.length)} da revisão.
+                        </h3>
+                        <p className={`text-sm sm:text-base mt-1 mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                          O que deseja fazer?
+                        </p>
+                        <div className="space-y-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowExitModal(false)}
+                            style={{ background: 'linear-gradient(90deg, #7c3aed, #4f46e5)' }}
+                            className="w-full py-3 rounded-xl text-white font-semibold text-sm sm:text-base shadow-md hover:opacity-95 transition"
+                          >
+                            Continuar respondendo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveAndExitStudy}
+                            className={`w-full py-3 rounded-xl border font-medium text-sm sm:text-base transition ${isDark ? 'border-[#444] text-gray-200 hover:bg-[#2a2a2a]' : 'border-gray-400 text-[#111827] hover:bg-black/5'}`}
+                          >
+                            Salvar e sair
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // ------------------------------------------------------------------
+            // SUBTELA 4: CONCLUSÃO DA RODADA
+            // ------------------------------------------------------------------
+            if (subScreen === 'done') {
+              const vals = Object.values(sessionResults);
+              const hits = vals.filter(v => v === 'hit').length;
+              const misses = vals.filter(v => v === 'miss').length;
+              const missedIds = activeQueueCards.filter(c => sessionResults[c.id] === 'miss').map(c => c.id);
+              const doneSubtitle = activeGroup
+                ? `${activeGroup.specialty} · ${activeGroup.theme}`
+                : (studyCustomTitle || 'Limbo dos Flashcards');
+              return (
+                <div className="max-w-md mx-auto px-4 py-12 text-center animate-fade-in">
+                  <div className={`rounded-3xl p-7 border shadow-xl ${isDark ? 'bg-[#171717] border-[#2e2e2e]' : 'bg-white border-gray-200'}`}>
+                    <div className="text-5xl mb-3">🎯</div>
+                    <h2 className="text-2xl font-black">Sessão concluída!</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{doneSubtitle}</p>
+                    <div className="grid grid-cols-2 gap-3 my-6">
+                      <div className="rounded-2xl p-3.5 bg-green-500/10 border border-green-500/20">
+                        <div className="text-2xl font-black text-green-500">{hits}</div>
+                        <div className="text-xs font-bold text-gray-500 dark:text-gray-400">Já sei (dominados)</div>
+                      </div>
+                      <div className="rounded-2xl p-3.5 bg-red-500/10 border border-red-500/20">
+                        <div className="text-2xl font-black text-red-500">{misses}</div>
+                        <div className="text-xs font-bold text-gray-500 dark:text-gray-400">Errei (foram p/ Limbo)</div>
+                      </div>
+                    </div>
+                    <div className="space-y-2.5">
+                      {misses > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (studyReturnScreen === 'limbo') {
+                              startLimboRound(missedIds, doneSubtitle, activeGroup?.themeKey || null);
+                            } else if (activeGroup) {
+                              startStudyRound(activeGroup, false);
+                            }
+                          }}
+                          className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm transition"
+                        >
+                          Revisar os erros agora ({misses}) →
+                        </button>
+                      )}
+                      {studyReturnScreen === 'limbo' && (
+                        <button
+                          type="button"
+                          onClick={() => { resetCardInteractionState(); setSubScreen('limbo'); }}
+                          className="w-full py-3.5 rounded-xl bg-purple-600/15 text-purple-500 dark:text-purple-300 font-bold text-sm transition"
+                        >
+                          🌀 Voltar ao Limbo
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { resetCardInteractionState(); setSubScreen('list'); }}
+                        className={`w-full py-3.5 rounded-xl border font-bold text-sm transition ${isDark ? 'border-[#3a3a3a] hover:bg-[#222]' : 'border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        Voltar aos temas
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // ------------------------------------------------------------------
+            // SUBTELA 2: RESUMO DO TEMA + ANEL DE PORCENTAGEM (Imagem 1)
+            // ------------------------------------------------------------------
+            if (subScreen === 'summary' && activeGroup) {
+              const r = 48;
+              const circ = 2 * Math.PI * r;
+              const dashOffset = circ - (circ * activeGroup.pct) / 100;
+              const hasPaused = !!(activeGroup.pausedSession && activeGroup.pausedSession.queueIds.length > 0);
+              const ctaText = hasPaused
+                ? 'Continuar flashcards'
+                : activeGroup.isCompleted
+                  ? 'Revisar tema novamente'
+                  : 'Iniciar flashcards';
+
+              return (
+                <div className="max-w-2xl mx-auto px-4 py-6 pb-24 animate-fade-in">
+                  <button
+                    type="button"
+                    onClick={() => setSubScreen('list')}
+                    className={`mb-5 px-3 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-1.5 ${isDark ? 'bg-[#222] text-gray-200 hover:bg-[#2b2b2b]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    <span>← Voltar aos temas</span>
+                  </button>
+
+                  <div className={`rounded-3xl border p-6 sm:p-8 shadow-sm ${isDark ? 'bg-[#171717] border-[#2c2c2c]' : 'bg-white border-gray-200'}`}>
+                    {/* Header igual Imagem 1 */}
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${isDark ? 'bg-[#232323] border-[#383838] text-gray-200' : 'bg-[#F8F6F0] border-gray-200 text-gray-800'}`}>
+                          <Icons.Flashcard />
+                        </div>
+                        <span className="text-xl sm:text-2xl font-medium">Flashcards</span>
+                      </div>
+                      <span
+                        className="text-xs font-black px-3 py-1 rounded-full"
+                        style={{
+                          backgroundColor: activeGroup.specMeta.badgeBg,
+                          color: isDark ? activeGroup.specMeta.badgeTextDark : activeGroup.specMeta.badgeTextLight
+                        }}
+                      >
+                        {activeGroup.specMeta.badgeCode} · {activeGroup.specialty}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 text-center">
+                      <h2 className="text-lg sm:text-xl font-bold">{activeGroup.theme}</h2>
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {activeGroup.masteredCount} de {activeGroup.total} dominados
+                        {activeGroup.wrongIdsInTheme.length > 0 ? ` · ${activeGroup.wrongIdsInTheme.length} para repetir` : ''}
+                        {hasPaused ? ` · pausado em ${pad2(activeGroup.pausedSession.index + 1)}/${pad2(activeGroup.pausedSession.queueIds.length)}` : ''}
+                      </p>
+                    </div>
+
+                    {/* Anel circular SVG (Imagem 1) */}
+                    <div className="my-8 flex flex-col items-center justify-center">
+                      <div className="relative w-36 h-36 flex items-center justify-center">
+                        <svg className="w-36 h-36 -rotate-90" viewBox="0 0 120 120">
+                          <defs>
+                            <linearGradient id="fcSummaryRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#7c3aed" />
+                              <stop offset="100%" stopColor="#4f46e5" />
+                            </linearGradient>
+                          </defs>
+                          <circle
+                            cx="60"
+                            cy="60"
+                            r={r}
+                            fill="none"
+                            stroke={isDark ? '#2e2e2e' : '#d6d2c9'}
+                            strokeWidth="8"
+                          />
+                          <circle
+                            cx="60"
+                            cy="60"
+                            r={r}
+                            fill="none"
+                            stroke="url(#fcSummaryRingGrad)"
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeDasharray={circ}
+                            strokeDashoffset={dashOffset}
+                            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                          />
+                        </svg>
+                        <span className="absolute text-2xl font-medium">
+                          {activeGroup.pct}%
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => startStudyRound(activeGroup, activeGroup.isCompleted && !hasPaused)}
+                        className="mt-5 inline-flex items-center gap-2 text-base sm:text-lg font-medium hover:opacity-80 transition px-5 py-2.5 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-300"
+                      >
+                        <span>{ctaText}</span>
+                        <span className="text-purple-500">→</span>
+                      </button>
+                    </div>
+
+                    <div className={`border-t pt-4 text-center ${isDark ? 'border-[#2b2b2b]' : 'border-gray-200'}`}>
+                      {!activeGroup.isCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => handleForceFinishTheme(activeGroup)}
+                          className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
+                        >
+                          forçar finalização
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Resetar o progresso de "${activeGroup.theme}" para estudar do zero?`)) {
+                              resetFlashcardThemeProgress(activeGroup.themeKey, activeGroup.cardIds);
+                            }
+                          }}
+                          className="text-sm text-gray-500 dark:text-gray-400 hover:underline"
+                        >
+                          resetar este tema
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // ------------------------------------------------------------------
+            // SUBTELA 5: LIMBO DOS FLASHCARDS (cards enviados para a esquerda)
+            // ------------------------------------------------------------------
+            if (subScreen === 'limbo') {
+              return (
+                <div className="max-w-3xl mx-auto px-4 py-6 pb-24 flex flex-col gap-5 animate-fade-in">
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSubScreen('list')}
+                      className={`px-3 py-2 rounded-xl text-sm font-bold ${isDark ? 'bg-[#222] text-gray-200 hover:bg-[#2b2b2b]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      ← Voltar aos temas
+                    </button>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-red-500/15 text-red-500">
+                      🌀 {limboCardIds.length} no Limbo
+                    </span>
+                  </div>
+
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
+                      <span>🌀</span>
+                      <span>Limbo dos Flashcards</span>
+                    </h2>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Os flashcards que você enviou para a esquerda (Errei) ficam salvos aqui por tema para você revisar depois. Ao acertar (Já sei), eles saem do Limbo automaticamente.
+                    </p>
+                  </div>
+
+                  {limboCardIds.length === 0 ? (
+                    <div className={`rounded-2xl border p-8 text-center ${isDark ? 'bg-[#181818] border-[#2d2d2d]' : 'bg-white border-gray-200'}`}>
+                      <div className="text-4xl mb-2">🌀</div>
+                      <p className="text-sm font-bold">Nenhum flashcard no Limbo</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Quando você arrastar um flashcard para a esquerda (Errei), ele aparecerá aqui para revisão futura.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        data-fc-limbo-review-all="1"
+                        onClick={() => startLimboRound(limboCardIds, 'Todos do Limbo', null)}
+                        className="w-full py-3.5 px-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm sm:text-base shadow-md transition flex items-center justify-center gap-2"
+                      >
+                        <span>🌀 Revisar todos do Limbo ({limboCardIds.length}) →</span>
+                      </button>
+
+                      <div className="space-y-3">
+                        {limboGroups.map(group => (
+                          <button
+                            key={group.themeKey}
+                            type="button"
+                            data-fc-limbo-theme={group.theme}
+                            onClick={() => startLimboRound(group.wrongIdsInTheme, group.theme, group.themeKey)}
+                            style={{ borderBottomWidth: '3px', borderBottomColor: group.specMeta.accent }}
+                            className={`w-full rounded-2xl border p-4 sm:p-5 text-left transition hover:shadow-md active:scale-[0.995] ${
+                              isDark ? 'bg-[#1a1a1a] border-[#2e2e2e] hover:bg-[#202020]' : 'bg-white border-gray-200 hover:bg-gray-50/90'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wide shrink-0"
+                                  style={{
+                                    backgroundColor: group.specMeta.badgeBg,
+                                    color: isDark ? group.specMeta.badgeTextDark : group.specMeta.badgeTextLight
+                                  }}
+                                >
+                                  {group.specMeta.badgeCode}
+                                </span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                  {group.specialty}
+                                </span>
+                              </div>
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-500/15 text-red-500 shrink-0">
+                                🌀 {pad2(group.wrongIdsInTheme.length)} no Limbo
+                              </span>
+                            </div>
+                            <div className={`text-base sm:text-lg font-medium ${isDark ? 'text-white' : 'text-[#111827]'}`}>
+                              {group.theme}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            // ------------------------------------------------------------------
+            // SUBTELA 1: ESCOLHA DE TEMAS (Imagem 2)
+            // ------------------------------------------------------------------
+            return (
+              <div className="max-w-3xl mx-auto px-4 py-6 pb-24 flex flex-col gap-5 animate-fade-in">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('painel')}
+                    className={`px-3 py-2 rounded-xl text-sm font-bold ${isDark ? 'bg-[#222] text-gray-200 hover:bg-[#2b2b2b]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    ← Painel
+                  </button>
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+                    <button
+                      type="button"
+                      data-fc-limbo-btn="1"
+                      onClick={() => setSubScreen('limbo')}
+                      title="Limbo dos Flashcards (cards enviados para a esquerda)"
+                      aria-label={`Limbo dos Flashcards (${limboCardIds.length})`}
+                      className={`px-2.5 py-1.5 rounded-xl border inline-flex items-center gap-1 text-xs font-bold transition ${
+                        limboCardIds.length > 0
+                          ? (isDark ? 'bg-red-500/15 border-red-500/40 text-red-300 hover:bg-red-500/25' : 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100')
+                          : (isDark ? 'bg-[#222] border-[#333] text-gray-300 hover:bg-[#2a2a2a]' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50')
+                      }`}
+                    >
+                      <span aria-hidden="true">🌀</span>
+                      {limboCardIds.length > 0 && <span>{pad2(limboCardIds.length)}</span>}
+                    </button>
+                    <span>Meta diária <b className="font-bold">{pad2(dailyTarget)}</b></span>
+                    <span>Feitos no dia <b className="font-bold">{pad2(todayStat.done)}</b></span>
+                    <button
+                      type="button"
+                      onClick={() => setShowDailyStats(v => !v)}
+                      title="Estatísticas do dia"
+                      className={`p-1.5 rounded-lg border ${isDark ? 'bg-[#222] border-[#333] text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}
+                    >
+                      <Icons.BarChart />
+                    </button>
+                  </div>
+                </div>
+
+                {showDailyStats && (
+                  <div className={`rounded-2xl p-3.5 border text-xs flex flex-wrap items-center justify-between gap-2 ${isDark ? 'bg-[#1b1b1b] border-[#2e2e2e]' : 'bg-white border-gray-200'}`}>
+                    <span>Hoje: <b className="text-green-500">{todayStat.hits} Já sei</b> · <b className="text-red-500">{todayStat.misses} Errei</b></span>
+                    <span>Total no banco: <b>{flashcardsCatalog.length} cards</b> ({masteredSet.size} dominados · {wrongSet.size} para repetir)</span>
+                  </div>
+                )}
+
+                {/* Abas Temas do dia / Feitos (Imagem 2) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setListTab('today')}
+                    className={`py-3 px-4 rounded-xl text-sm sm:text-base font-medium flex items-center justify-center gap-2 border transition ${
+                      listTab === 'today'
+                        ? (isDark ? 'bg-[#f4f4f5] text-[#18181b] border-[#f4f4f5]' : 'bg-[#2b2a29] text-white border-[#2b2a29]')
+                        : (isDark ? 'bg-[#1a1a1a] text-gray-300 border-[#333]' : 'bg-white/75 text-gray-800 border-gray-300')
+                    }`}
+                  >
+                    <Icons.Book />
+                    <span>Temas do dia ({todayThemes.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListTab('done')}
+                    className={`py-3 px-4 rounded-xl text-sm sm:text-base font-medium flex items-center justify-center gap-2 border transition ${
+                      listTab === 'done'
+                        ? (isDark ? 'bg-[#f4f4f5] text-[#18181b] border-[#f4f4f5]' : 'bg-[#2b2a29] text-white border-[#2b2a29]')
+                        : (isDark ? 'bg-[#1a1a1a] text-gray-300 border-[#333]' : 'bg-white/75 text-gray-800 border-gray-300')
+                    }`}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-green-500 text-white text-[10px] inline-flex items-center justify-center font-black">✓</span>
+                    <span>Feitos ({doneThemes.length})</span>
+                  </button>
+                </div>
+
+                {/* Filtros por especialidade + busca */}
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSpec('all')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
+                        selectedSpec === 'all'
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : isDark ? 'bg-[#1b1b1b] border-[#303030] text-gray-300' : 'bg-white border-gray-200 text-gray-700'
+                      }`}
+                    >
+                      Todas
+                    </button>
+                    {specialtyFilters.map(meta => (
+                      <button
+                        key={meta.label}
+                        type="button"
+                        onClick={() => setSelectedSpec(meta.label)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 transition ${
+                          selectedSpec === meta.label
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : isDark ? 'bg-[#1b1b1b] border-[#303030] text-gray-300' : 'bg-white border-gray-200 text-gray-700'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.accent }} />
+                        <span>{meta.badgeCode}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar tema ou especialidade…"
+                    className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-purple-500 ${
+                      isDark ? 'bg-[#1a1a1a] border-[#2e2e2e] text-white placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+                    }`}
+                  />
+                </div>
+
+                {flashcardsSyncMessage && (
+                  <div className={`text-xs px-3 py-2 rounded-xl border ${
+                    flashcardsSyncError
+                      ? 'border-red-400/40 bg-red-500/10 text-red-500'
+                      : 'border-purple-400/30 bg-purple-500/10 text-purple-600 dark:text-purple-300'
+                  }`}>
+                    {flashcardsSyncMessage}
+                  </div>
+                )}
+
+                {flashcardsLoading && visibleThemes.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-gray-500">Carregando flashcards…</div>
+                ) : visibleThemes.length === 0 ? (
+                  <div className={`rounded-2xl border p-8 text-center ${isDark ? 'bg-[#181818] border-[#2d2d2d]' : 'bg-white border-gray-200'}`}>
+                    <div className="text-3xl mb-2">🃏</div>
+                    <p className="text-sm font-bold">
+                      {listTab === 'done'
+                        ? 'Nenhum tema concluído ainda.'
+                        : 'Nenhum tema pendente encontrado para este filtro.'}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Adicione ou importe flashcards no Editor de Questões e clique em "Atualizar temas".
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {visibleThemes.map(group => {
+                      const showHourglass = Boolean(group.pausedSession || group.wrongIdsInTheme.length > 0);
+                      const inProgress = Boolean(group.pausedSession || group.masteredCount > 0 || group.wrongIdsInTheme.length > 0);
+                      return (
+                        <div key={group.themeKey} className="space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openThemeSummary(group)}
+                            style={{ borderBottomWidth: '3px', borderBottomColor: group.specMeta.accent }}
+                            className={`w-full rounded-2xl border p-4 sm:p-5 text-left relative transition hover:shadow-md active:scale-[0.995] ${
+                              isDark ? 'bg-[#1a1a1a] border-[#2e2e2e] hover:bg-[#202020]' : 'bg-white border-gray-200 hover:bg-gray-50/90'
+                            }`}
+                          >
+                            {showHourglass && (
+                              <span
+                                title={group.pausedSession ? 'Em andamento (salvo onde você parou)' : 'Tem flashcards errados para repetir'}
+                                className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-amber-400 text-white text-xs font-black flex items-center justify-center shadow"
+                              >
+                                ⌛
+                              </span>
+                            )}
+                            <div className="flex items-center justify-between gap-2 mb-2.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="px-2.5 py-0.5 rounded-md text-[11px] font-black tracking-wide shrink-0"
+                                  style={{
+                                    backgroundColor: group.specMeta.badgeBg,
+                                    color: isDark ? group.specMeta.badgeTextDark : group.specMeta.badgeTextLight
+                                  }}
+                                >
+                                  {group.specMeta.badgeCode}
+                                </span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                  {group.specialty}
+                                </span>
+                              </div>
+                              <span className="text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 shrink-0 text-gray-600 dark:text-gray-300">
+                                <svg className="w-3.5 h-3.5 opacity-75" fill="currentColor" viewBox="0 0 16 16">
+                                  <rect x="2" y="3" width="12" height="10" rx="2" />
+                                </svg>
+                                <span>{pad2(group.masteredCount)}/{pad2(group.total)}</span>
+                              </span>
+                            </div>
+                            <div className={`text-base sm:text-lg font-medium ${isDark ? 'text-white' : 'text-[#111827]'}`}>
+                              {group.theme}
+                            </div>
+                          </button>
+
+                          {listTab === 'today' && inProgress && (
+                            <div className="text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleForceFinishTheme(group)}
+                                className="text-xs text-gray-500 dark:text-gray-400 hover:underline py-1"
+                              >
+                                Forçar finalização do tema
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => loadFlashcardsCatalog({ manual: true })}
+                    disabled={flashcardsLoading}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${
+                      isDark ? 'text-gray-300 hover:bg-[#222]' : 'text-gray-700 hover:bg-black/5'
+                    }`}
+                  >
+                    <Icons.Refresh />
+                    <span>{flashcardsLoading ? 'Atualizando temas…' : 'Atualizar temas'}</span>
+                  </button>
+                </div>
               </div>
             );
           };
@@ -15113,6 +17069,7 @@
           const StableHeader = useStableNestedComponent(Header);
           const StableSettingsDrawer = useStableNestedComponent(SettingsDrawer);
           const StablePainelView = useStableNestedComponent(PainelView);
+          const StableFlashcardsView = useStableNestedComponent(FlashcardsView);
           const StableBancoView = useStableNestedComponent(BancoView);
           const StableSimuladosGeralView = useStableNestedComponent(SimuladosGeralView);
           const StableBibliotecaView = useStableNestedComponent(BibliotecaView);
@@ -15344,7 +17301,7 @@
                 .dark ::-webkit-scrollbar-thumb { background: #333; }
               `}</style>
               
-              {currentView !== 'question' && <StableHeader />}
+              {!(currentView === 'question' || (currentView === 'flashcards' && flashcardSessionActive)) && <StableHeader />}
               {!progressHydrated && liveBankLoaded && (
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 z-[90] pointer-events-none px-3 py-1.5 rounded-b-xl bg-purple-600/90 text-white text-[10px] font-bold shadow-lg" style={{top:'var(--hfoqo-safe-top, 0px)'}}>
                   Sincronizando progresso…
@@ -15354,11 +17311,11 @@
               <div className="app-content-frame flex flex-1 min-h-0 min-w-0 overflow-hidden relative w-full max-w-full">
                 <main
                   className={`app-main flex-1 min-h-0 min-w-0 w-full max-w-full ${
-                    currentView === 'question'
+                    (currentView === 'question' || (currentView === 'flashcards' && flashcardSessionActive))
                       ? 'overflow-hidden flex flex-col'
                       : 'overflow-y-auto overflow-x-hidden'
                   }`}
-                  style={currentView !== 'question' ? { paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}
+                  style={!(currentView === 'question' || (currentView === 'flashcards' && flashcardSessionActive)) ? { paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}
                 >
                   {currentView === 'painel' && <StablePainelView />}
                   {currentView === 'banco' && <HZViewErrorBoundary key="banco" area="Banco de Dados" onExit={() => returnToAccessScreen(false)}><StableBancoView /></HZViewErrorBoundary>}
@@ -15370,6 +17327,7 @@
                   {currentView === 'metricas' && <StableMetricasView />}
                   {currentView === 'diagnostico' && <StableDiagnosticoView />}
                   {currentView === 'desafio' && <StableDesafioView />}
+                  {currentView === 'flashcards' && <StableFlashcardsView />}
                   {currentView === 'question' && <StableQuestionView />}
                   {currentView === 'biblioteca' && <StableBibliotecaView />}
                 </main>
