@@ -41,6 +41,9 @@
     
     <!-- Babel para JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- PDF.js para leitura nativa e marca-texto no próprio site -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -316,6 +319,8 @@
         const HZ_SYNC_EXCLUDED_KEYS = new Set([
           HZ_SYNC_BASELINE_KEY,
           'hfoqo_biblioteca_resumos_cache_v1',
+          'hfoqo_aulas_catalog_cache_v1',
+          'hfoqo_aulas_player_mode_v1',
           'hfoqo_legacy_progress_user_id',
           'hfoqo_progress_migrated_to_4441'
         ]);
@@ -479,7 +484,7 @@
             const winnerApp = bqhzResetWinner.appState || {};
             const bankActiveRound = appState.bancoActiveRound;
             ['startDate','examDate','dailyQuestionGoal','dailyPlan','activeRound','isDark','desafioSettings',
-              'bibliotecaStatus','completedQuestionIds','completedImmersaoQuestionIds','completedThemeHistory',
+              'bibliotecaStatus','aulasProgress','completedQuestionIds','completedImmersaoQuestionIds','completedThemeHistory',
               'desafioThemeHistory','desafioKnownQuestionIds','desafioLimboQuestionIds','trilhaLimboQuestionIds',
               'activityLog','limboList','limboSelections'].forEach(key => {
                 if (Object.prototype.hasOwnProperty.call(winnerApp, key)) appState[key] = winnerApp[key];
@@ -1539,7 +1544,16 @@
           AlertCircle: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>,
           GraduationCap: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222"></path></svg>,
           BookX: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253M9 10l3 3m0 0l3 3m-3-3l-3 3m3-3l3-3"></path></svg>,
-          BookCheck: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253M9 12l2 2 4-4"></path></svg>
+          BookCheck: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253M9 12l2 2 4-4"></path></svg>,
+          Database: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" strokeWidth="2"></ellipse><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5v14c0 1.657 3.582 3 8 3s8-1.343 8-3V5"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3"></path></svg>,
+          ChevronRight: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>,
+          ChevronDown: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>,
+          FileText: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>,
+          Folder: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path></svg>,
+          Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>,
+          ExternalLink: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>,
+          List: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>,
+          Video: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
         };
 
         function loadStoredCompletedThemeHistory() {
@@ -2156,6 +2170,792 @@
           }
         }
 
+        const PDFJS_MAIN_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        const PDFJS_MAIN_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const PDFJS_ALT_SRC = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js';
+        const PDFJS_ALT_WORKER = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        const aulasPdfBytesCache = new Map();
+
+        function ensurePdfJsLoaded() {
+          const configure = (lib, workerUrl) => {
+            if (!lib) return null;
+            try {
+              if (lib.GlobalWorkerOptions && window.location.protocol !== 'file:') {
+                lib.GlobalWorkerOptions.workerSrc = workerUrl || PDFJS_MAIN_WORKER;
+              }
+            } catch {}
+            return lib;
+          };
+          if (window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function') {
+            return Promise.resolve(configure(window.pdfjsLib, PDFJS_MAIN_WORKER));
+          }
+          const loadScript = (src) => new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            s.onload = () => window.pdfjsLib ? resolve(window.pdfjsLib) : reject(new Error('PDF.js não inicializou.'));
+            s.onerror = () => reject(new Error('Falha ao baixar leitor PDF.js.'));
+            document.head.appendChild(s);
+          });
+          return loadScript(PDFJS_MAIN_SRC)
+            .then(lib => configure(lib, PDFJS_MAIN_WORKER))
+            .catch(() => loadScript(PDFJS_ALT_SRC).then(lib => configure(lib, PDFJS_ALT_WORKER)));
+        }
+
+        function base64ToUint8Array(base64Str) {
+          const clean = String(base64Str || '').replace(/[\r\n\s]+/g, '');
+          const binary = atob(clean);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          return bytes;
+        }
+
+        function sanitizePdfHighlights(rawList) {
+          if (!Array.isArray(rawList)) return [];
+          const clamp01 = (v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? Math.max(0, Math.min(1, Math.round(n * 10000) / 10000)) : 0;
+          };
+          const out = [];
+          for (const raw of rawList.slice(-600)) {
+            if (!raw || typeof raw !== 'object') continue;
+            const page = Math.max(1, Math.floor(Number(raw.page) || 0));
+            const color = /^#[0-9a-f]{6}$/i.test(String(raw.color || '')) ? String(raw.color) : '#facc15';
+            const id = String(raw.id || `hl_${Date.now()}_${out.length}`).slice(0, 64);
+            const createdAt = String(raw.createdAt || '');
+            if (raw.kind === 'path' && Array.isArray(raw.points) && raw.points.length >= 2) {
+              const points = raw.points
+                .filter(pt => Array.isArray(pt) && pt.length >= 2)
+                .slice(0, 220)
+                .map(pt => [clamp01(pt[0]), clamp01(pt[1])]);
+              if (points.length >= 2) {
+                const size = Math.max(0.008, Math.min(0.08, Number(raw.size) || 0.026));
+                out.push({ id, page, kind: 'path', points, size, color, createdAt });
+              }
+            } else if (raw.kind === 'rect') {
+              const x = clamp01(raw.x);
+              const y = clamp01(raw.y);
+              const w = clamp01(raw.w);
+              const h = clamp01(raw.h);
+              if (w >= 0.004 && h >= 0.004) {
+                out.push({ id, page, kind: 'rect', x, y, w, h, color, createdAt });
+              }
+            }
+          }
+          return out;
+        }
+
+        const PdfPageCanvas = React.memo(({
+          pdfDoc,
+          pageNumber,
+          zoom,
+          containerWidth,
+          tool,
+          brushMode,
+          highlightColor,
+          highlights,
+          onAddHighlight,
+          onDeleteHighlight,
+          registerPageEl
+        }) => {
+          const wrapRef = React.useRef(null);
+          const canvasRef = React.useRef(null);
+          const svgRef = React.useRef(null);
+          const draftRef = React.useRef(null);
+          const [aspectRatio, setAspectRatio] = useState(1.4142);
+          const [isNear, setIsNear] = useState(pageNumber <= 2);
+          const [renderError, setRenderError] = useState('');
+          const [draft, setDraft] = useState(null);
+
+          const baseWidth = Math.max(260, Math.min(Math.max(300, (containerWidth || 720) - 24), 900));
+          const displayWidth = Math.max(220, Math.round(baseWidth * zoom));
+          const displayHeight = Math.max(240, Math.round(displayWidth * aspectRatio));
+
+          useEffect(() => {
+            if (typeof registerPageEl === 'function') {
+              registerPageEl(pageNumber, wrapRef.current);
+            }
+            return () => {
+              if (typeof registerPageEl === 'function') registerPageEl(pageNumber, null);
+            };
+          }, [pageNumber, registerPageEl]);
+
+          useEffect(() => {
+            const el = wrapRef.current;
+            if (!el) return undefined;
+            if (typeof IntersectionObserver !== 'function') {
+              setIsNear(true);
+              return undefined;
+            }
+            const obs = new IntersectionObserver((entries) => {
+              if (entries.some(e => e.isIntersecting)) {
+                setIsNear(true);
+              }
+            }, { rootMargin: '600px 0px' });
+            obs.observe(el);
+            return () => obs.disconnect();
+          }, []);
+
+          useEffect(() => {
+            if (!pdfDoc || !isNear) return undefined;
+            let cancelled = false;
+            let renderTask = null;
+            (async () => {
+              try {
+                const page = await pdfDoc.getPage(pageNumber);
+                if (cancelled) return;
+                const vp1 = page.getViewport({ scale: 1 });
+                if (vp1.width > 0 && vp1.height > 0) {
+                  setAspectRatio(vp1.height / vp1.width);
+                }
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const dpr = Math.min(window.devicePixelRatio || 1, 2);
+                const cssW = Math.max(220, Math.round(baseWidth * zoom));
+                const scale = (cssW / Math.max(1, vp1.width)) * dpr;
+                const vp = page.getViewport({ scale });
+                canvas.width = Math.max(1, Math.floor(vp.width));
+                canvas.height = Math.max(1, Math.floor(vp.height));
+                const ctx = canvas.getContext('2d', { alpha: false });
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                renderTask = page.render({ canvasContext: ctx, viewport: vp });
+                await renderTask.promise;
+                if (!cancelled) setRenderError('');
+              } catch (err) {
+                if (err?.name === 'RenderingCancelledException' || cancelled) return;
+                setRenderError(err?.message || 'Erro ao renderizar página.');
+              }
+            })();
+            return () => {
+              cancelled = true;
+              try { renderTask?.cancel?.(); } catch {}
+            };
+          }, [pdfDoc, pageNumber, zoom, baseWidth, isNear]);
+
+          const getNormalizedPoint = (e) => {
+            const rect = svgRef.current?.getBoundingClientRect();
+            if (!rect || rect.width <= 0 || rect.height <= 0) return [0, 0];
+            const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            return [Math.round(x * 10000) / 10000, Math.round(y * 10000) / 10000];
+          };
+
+          const handlePointerDown = (e) => {
+            if (tool !== 'highlight' || e.button > 0) return;
+            e.preventDefault();
+            try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch {}
+            const [x, y] = getNormalizedPoint(e);
+            const initial = brushMode === 'free'
+              ? { kind: 'path', points: [[x, y]], size: 0.026, color: highlightColor }
+              : { kind: 'rectDraft', x0: x, y0: y, x1: x, y1: y, color: highlightColor };
+            draftRef.current = initial;
+            setDraft(initial);
+          };
+
+          const handlePointerMove = (e) => {
+            const cur = draftRef.current;
+            if (!cur || tool !== 'highlight') return;
+            e.preventDefault();
+            const [x, y] = getNormalizedPoint(e);
+            if (cur.kind === 'free' || cur.kind === 'path') {
+              const last = cur.points[cur.points.length - 1];
+              if (!last || Math.hypot(x - last[0], y - last[1]) >= 0.004) {
+                const next = { ...cur, kind: 'path', points: [...cur.points, [x, y]] };
+                draftRef.current = next;
+                setDraft(next);
+              }
+            } else {
+              const next = { ...cur, x1: x, y1: y };
+              draftRef.current = next;
+              setDraft(next);
+            }
+          };
+
+          const finishDraft = () => {
+            const cur = draftRef.current;
+            draftRef.current = null;
+            setDraft(null);
+            if (!cur) return;
+            const now = new Date().toISOString();
+            const newId = `hl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+            if (cur.kind === 'path') {
+              if (cur.points.length >= 2) {
+                onAddHighlight({
+                  id: newId,
+                  page: pageNumber,
+                  kind: 'path',
+                  points: cur.points,
+                  size: cur.size || 0.026,
+                  color: cur.color || '#facc15',
+                  createdAt: now
+                });
+              }
+              return;
+            }
+            const dx = Math.abs(cur.x1 - cur.x0);
+            const dy = Math.abs(cur.y1 - cur.y0);
+            if (dx < 0.008 && dy < 0.008) return;
+            if (dy < 0.026) {
+              const h = 0.026;
+              const midY = (cur.y0 + cur.y1) / 2;
+              onAddHighlight({
+                id: newId,
+                page: pageNumber,
+                kind: 'rect',
+                x: Math.min(cur.x0, cur.x1),
+                y: Math.max(0, Math.min(1 - h, midY - h / 2)),
+                w: Math.max(0.015, dx),
+                h,
+                color: cur.color || '#facc15',
+                createdAt: now
+              });
+            } else {
+              onAddHighlight({
+                id: newId,
+                page: pageNumber,
+                kind: 'rect',
+                x: Math.min(cur.x0, cur.x1),
+                y: Math.min(cur.y0, cur.y1),
+                w: Math.max(0.015, dx),
+                h: dy,
+                color: cur.color || '#facc15',
+                createdAt: now
+              });
+            }
+          };
+
+          const buildPathD = (pts) => {
+            if (!Array.isArray(pts) || !pts.length) return '';
+            return pts.map((pt, idx) => `${idx === 0 ? 'M' : 'L'} ${Math.round(pt[0] * 10000) / 10} ${Math.round(pt[1] * 10000) / 10}`).join(' ');
+          };
+
+          const renderHighlightShape = (h, isDraft = false) => {
+            if (h.kind === 'rectDraft') {
+              const dx = Math.abs(h.x1 - h.x0);
+              const dy = Math.abs(h.y1 - h.y0);
+              const singleLine = dy < 0.026;
+              const rx = Math.min(h.x0, h.x1);
+              const rw = Math.max(0.015, dx);
+              const rh = singleLine ? 0.026 : dy;
+              const ry = singleLine ? Math.max(0, Math.min(1 - rh, (h.y0 + h.y1) / 2 - rh / 2)) : Math.min(h.y0, h.y1);
+              return (
+                <rect
+                  key="draft_rect"
+                  x={rx * 1000}
+                  y={ry * 1000}
+                  width={rw * 1000}
+                  height={rh * 1000}
+                  rx="4"
+                  fill={h.color}
+                  fillOpacity="0.46"
+                />
+              );
+            }
+            if (h.kind === 'path') {
+              return (
+                <path
+                  key={h.id || 'draft_path'}
+                  d={buildPathD(h.points)}
+                  fill="none"
+                  stroke={h.color}
+                  strokeOpacity={isDraft ? '0.46' : '0.48'}
+                  strokeWidth={(h.size || 0.026) * 1000}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={tool === 'erase' && !isDraft ? { pointerEvents: 'auto', cursor: 'pointer' } : undefined}
+                  onClick={tool === 'erase' && !isDraft ? (e) => { e.stopPropagation(); onDeleteHighlight(h.id); } : undefined}
+                />
+              );
+            }
+            return (
+              <rect
+                key={h.id}
+                x={h.x * 1000}
+                y={h.y * 1000}
+                width={h.w * 1000}
+                height={h.h * 1000}
+                rx="4"
+                fill={h.color}
+                fillOpacity="0.46"
+                className={tool === 'erase' ? 'hover:stroke-red-600 hover:stroke-[3]' : ''}
+                style={tool === 'erase' ? { pointerEvents: 'auto', cursor: 'pointer' } : undefined}
+                onClick={tool === 'erase' ? (e) => { e.stopPropagation(); onDeleteHighlight(h.id); } : undefined}
+              />
+            );
+          };
+
+          return (
+            <div
+              ref={wrapRef}
+              data-pdf-page={pageNumber}
+              className="relative mx-auto bg-white rounded-md shadow-xl overflow-hidden select-none border border-black/15"
+              style={{ width: `${displayWidth}px`, minHeight: `${displayHeight}px` }}
+            >
+              <canvas
+                ref={canvasRef}
+                className="block w-full h-auto bg-white"
+              />
+              {renderError && (
+                <div className="p-6 text-center text-xs text-red-600">{renderError}</div>
+              )}
+              <svg
+                ref={svgRef}
+                viewBox="0 0 1000 1000"
+                preserveAspectRatio="none"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={finishDraft}
+                onPointerCancel={finishDraft}
+                className="absolute inset-0 w-full h-full"
+                style={{
+                  mixBlendMode: 'multiply',
+                  touchAction: tool === 'highlight' ? 'none' : 'auto',
+                  pointerEvents: tool === 'highlight' ? 'auto' : 'none',
+                  cursor: tool === 'highlight' ? 'crosshair' : 'default'
+                }}
+              >
+                {(highlights || []).map(h => renderHighlightShape(h, false))}
+                {draft && renderHighlightShape(draft, true)}
+              </svg>
+              <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/55 text-white text-[10px] font-bold pointer-events-none">
+                Pág. {pageNumber}
+              </div>
+            </div>
+          );
+        });
+
+        const PDF_HIGHLIGHT_COLORS = [
+          { id: '#facc15', label: 'Amarelo' },
+          { id: '#4ade80', label: 'Verde' },
+          { id: '#f472b6', label: 'Rosa' },
+          { id: '#60a5fa', label: 'Azul' }
+        ];
+
+        const NativePdfReaderModal = ({
+          pdf,
+          isDark,
+          highlights,
+          onAddHighlight,
+          onDeleteHighlight,
+          onUndoHighlight,
+          onClearHighlights,
+          onClose,
+          fetchPdfBase64
+        }) => {
+          const [pdfDoc, setPdfDoc] = useState(null);
+          const [disguisedImageUrl, setDisguisedImageUrl] = useState('');
+          const [numPages, setNumPages] = useState(0);
+          const [currentPage, setCurrentPage] = useState(1);
+          const [zoom, setZoom] = useState(1);
+          const [tool, setTool] = useState('read'); // 'read' | 'highlight' | 'erase'
+          const [brushMode, setBrushMode] = useState('line'); // 'line' | 'free'
+          const [highlightColor, setHighlightColor] = useState('#facc15');
+          const [loading, setLoading] = useState(true);
+          const [errorMsg, setErrorMsg] = useState('');
+          const [useDriveFallback, setUseDriveFallback] = useState(false);
+          const [reloadTick, setReloadTick] = useState(0);
+          const [containerWidth, setContainerWidth] = useState(840);
+
+          const bodyRef = React.useRef(null);
+          const pageElsRef = React.useRef(new Map());
+
+          const registerPageEl = React.useCallback((pg, el) => {
+            if (el) pageElsRef.current.set(pg, el);
+            else pageElsRef.current.delete(pg);
+          }, []);
+
+          useEffect(() => {
+            const measure = () => {
+              const w = bodyRef.current?.clientWidth || window.innerWidth || 840;
+              setContainerWidth(w);
+            };
+            measure();
+            window.addEventListener('resize', measure);
+            return () => window.removeEventListener('resize', measure);
+          }, []);
+
+          useEffect(() => {
+            const onKey = (e) => {
+              if ((e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'z') {
+                if (highlights.length > 0) {
+                  e.preventDefault();
+                  onUndoHighlight();
+                }
+              }
+            };
+            window.addEventListener('keydown', onKey);
+            return () => window.removeEventListener('keydown', onKey);
+          }, [highlights.length, onUndoHighlight]);
+
+          useEffect(() => {
+            if (!pdf?.id || useDriveFallback) return undefined;
+            let cancelled = false;
+            let loadedDoc = null;
+            let createdObjUrl = '';
+            setLoading(true);
+            setErrorMsg('');
+            setPdfDoc(null);
+            setDisguisedImageUrl('');
+            setNumPages(0);
+            setCurrentPage(1);
+
+            const detectBinary = (bytes) => {
+              if (!bytes || bytes.length < 12) return { kind: 'unknown' };
+              if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return { kind: 'pdf', offset: 0 };
+              if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+                const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+                if (brand === 'avif' || brand === 'avis' || brand === 'mif1') return { kind: 'image', mime: 'image/avif' };
+              }
+              if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return { kind: 'image', mime: 'image/png' };
+              if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return { kind: 'image', mime: 'image/jpeg' };
+              if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+                return { kind: 'image', mime: 'image/webp' };
+              }
+              const limit = Math.min(bytes.length - 5, 1024);
+              for (let i = 1; i <= limit; i++) {
+                if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2D) {
+                  return { kind: 'pdf', offset: i };
+                }
+              }
+              return { kind: 'unknown' };
+            };
+
+            (async () => {
+              try {
+                let bytes = aulasPdfBytesCache.get(String(pdf.id));
+                if (!bytes) {
+                  const res = await fetchPdfBase64(pdf.id);
+                  if (cancelled) return;
+                  bytes = base64ToUint8Array(res.base64);
+                  if (aulasPdfBytesCache.size >= 8) {
+                    const firstKey = aulasPdfBytesCache.keys().next().value;
+                    if (firstKey) aulasPdfBytesCache.delete(firstKey);
+                  }
+                  aulasPdfBytesCache.set(String(pdf.id), bytes);
+                }
+                const info = detectBinary(bytes);
+                if (info.kind === 'image') {
+                  createdObjUrl = URL.createObjectURL(new Blob([bytes], { type: info.mime }));
+                  setDisguisedImageUrl(createdObjUrl);
+                  setLoading(false);
+                  return;
+                }
+                const pdfjsLib = await ensurePdfJsLoaded();
+                if (cancelled) return;
+                const cleanBytes = info.offset > 0 ? bytes.slice(info.offset) : bytes.slice();
+                const loadingTask = pdfjsLib.getDocument({
+                  data: cleanBytes,
+                  disableWorker: window.location.protocol === 'file:'
+                });
+                loadedDoc = await loadingTask.promise;
+                if (cancelled) {
+                  try { loadedDoc.destroy(); } catch {}
+                  return;
+                }
+                setPdfDoc(loadedDoc);
+                setNumPages(Number(loadedDoc.numPages || 0));
+                setLoading(false);
+              } catch (err) {
+                if (cancelled) return;
+                setErrorMsg(err?.message || 'Não foi possível carregar este PDF dentro do site.');
+                setLoading(false);
+              }
+            })();
+
+            return () => {
+              cancelled = true;
+              try { loadedDoc?.destroy?.(); } catch {}
+              if (createdObjUrl) {
+                try { URL.revokeObjectURL(createdObjUrl); } catch {}
+              }
+            };
+          }, [pdf?.id, useDriveFallback, reloadTick]);
+
+          const jumpToPage = (targetPage) => {
+            const pg = Math.max(1, Math.min(numPages || 1, targetPage));
+            setCurrentPage(pg);
+            const el = pageElsRef.current.get(pg);
+            if (el) {
+              try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+            }
+          };
+
+          const handleBodyScroll = () => {
+            const container = bodyRef.current;
+            if (!container || !numPages) return;
+            const cRect = container.getBoundingClientRect();
+            const targetY = cRect.top + Math.min(180, cRect.height * 0.35);
+            let bestPage = 1;
+            let bestDist = Infinity;
+            pageElsRef.current.forEach((el, pg) => {
+              const r = el.getBoundingClientRect();
+              if (r.top <= targetY && r.bottom >= targetY) {
+                bestPage = pg;
+                bestDist = 0;
+              } else {
+                const dist = Math.min(Math.abs(r.top - targetY), Math.abs(r.bottom - targetY));
+                if (dist < bestDist) {
+                  bestDist = dist;
+                  bestPage = pg;
+                }
+              }
+            });
+            if (bestPage !== currentPage) setCurrentPage(bestPage);
+          };
+
+          const highlightsByPage = useMemo(() => {
+            const map = new Map();
+            (highlights || []).forEach(h => {
+              const pg = Number(h.page || 1);
+              if (!map.has(pg)) map.set(pg, []);
+              map.get(pg).push(h);
+            });
+            return map;
+          }, [highlights]);
+
+          return (
+            <div className="fixed inset-0 z-[270000] bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" role="dialog" aria-modal="true">
+              <div className={`w-full max-w-6xl h-[100dvh] sm:h-[94dvh] rounded-none sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${isDark ? 'bg-[#141418] border-white/15 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+                {/* Cabeçalho */}
+                <div
+                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 border-b flex items-center justify-between gap-2 sm:gap-3 shrink-0 ${isDark ? 'border-white/10 bg-[#1a1a20]' : 'border-gray-200 bg-gray-50'}`}
+                  style={{ paddingTop: 'calc(0.65rem + var(--hfoqo-safe-top, 0px))' }}
+                >
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <span className="px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-black uppercase bg-rose-500/15 text-rose-500 border border-rose-500/30 shrink-0">PDF</span>
+                    <div className="min-w-0">
+                      {pdf.subtitle && <div className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">{pdf.subtitle}</div>}
+                      <div className="text-xs sm:text-base font-bold truncate">{pdf.title}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <span className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                      highlights.length > 0
+                        ? 'bg-yellow-400/20 border-yellow-400/50 text-yellow-600 dark:text-yellow-300'
+                        : (isDark ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-gray-100 border-gray-200 text-gray-500')
+                    }`}>
+                      {highlights.length} grifo{highlights.length === 1 ? '' : 's'}
+                    </span>
+                    <a
+                      href={`https://drive.google.com/file/d/${pdf.id}/view`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${isDark ? 'bg-white/10 hover:bg-white/15 text-gray-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                    >
+                      <Icons.ExternalLink /> <span className="hidden md:inline">Abrir no Drive</span><span className="md:hidden">Drive</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Fechar PDF"
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors ${isDark ? 'bg-white/10 hover:bg-red-500/30 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                    >
+                      <Icons.X />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barra de Ferramentas: Ler / Marca-texto Amarelo / Apagar / Zoom / Páginas */}
+                {!useDriveFallback && (
+                  <div className={`px-3 sm:px-5 py-2 border-b flex flex-wrap items-center justify-between gap-2 shrink-0 ${isDark ? 'border-white/10 bg-[#17171d]' : 'border-gray-200 bg-gray-100/80'}`}>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <div className={`inline-flex p-0.5 rounded-xl border ${isDark ? 'bg-black/30 border-white/10' : 'bg-white border-gray-200'}`} role="group" aria-label="Ferramenta de leitura">
+                        <button
+                          type="button"
+                          onClick={() => setTool('read')}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${tool === 'read' ? 'bg-purple-600 text-white shadow-sm' : (isDark ? 'text-gray-300 hover:text-white' : 'text-gray-700')}`}
+                        >
+                          📖 Ler
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTool('highlight')}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${tool === 'highlight' ? 'bg-yellow-400 text-gray-950 shadow-sm font-black' : (isDark ? 'text-gray-300 hover:text-white' : 'text-gray-700')}`}
+                        >
+                          🖍 Marca-texto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTool('erase')}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${tool === 'erase' ? 'bg-rose-500 text-white shadow-sm' : (isDark ? 'text-gray-300 hover:text-white' : 'text-gray-700')}`}
+                        >
+                          ⌫ Apagar
+                        </button>
+                      </div>
+
+                      {tool === 'highlight' && (
+                        <>
+                          <div className="inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border border-white/10 bg-black/15 dark:bg-black/30">
+                            {PDF_HIGHLIGHT_COLORS.map(c => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setHighlightColor(c.id)}
+                                title={c.label}
+                                aria-label={`Cor ${c.label}`}
+                                className={`w-5 h-5 rounded-full border-2 transition-transform ${highlightColor === c.id ? 'border-white scale-110 ring-2 ring-purple-500' : 'border-black/20 opacity-75 hover:opacity-100'}`}
+                                style={{ backgroundColor: c.id }}
+                              />
+                            ))}
+                          </div>
+                          <div className={`inline-flex p-0.5 rounded-xl border ${isDark ? 'bg-black/30 border-white/10' : 'bg-white border-gray-200'}`}>
+                            <button
+                              type="button"
+                              onClick={() => setBrushMode('line')}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold ${brushMode === 'line' ? 'bg-purple-600 text-white' : (isDark ? 'text-gray-300' : 'text-gray-600')}`}
+                              title="Arraste sobre uma linha ou bloco para grifar reto"
+                            >
+                              Linha
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBrushMode('free')}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold ${brushMode === 'free' ? 'bg-purple-600 text-white' : (isDark ? 'text-gray-300' : 'text-gray-600')}`}
+                              title="Traço livre com dedo, caneta ou mouse"
+                            >
+                              Livre
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={highlights.length === 0}
+                        onClick={onUndoHighlight}
+                        title="Desfazer último grifo (Ctrl+Z)"
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border disabled:opacity-35 transition-colors ${isDark ? 'bg-white/5 border-white/10 text-gray-200 hover:bg-white/10' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        ↶ Desfazer
+                      </button>
+                      {highlights.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => { if (window.confirm('Apagar todos os grifos deste PDF?')) onClearHighlights(); }}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                        >
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      {numPages > 0 && (
+                        <div className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border text-xs font-bold ${isDark ? 'bg-black/30 border-white/10 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}>
+                          <button type="button" disabled={currentPage <= 1} onClick={() => jumpToPage(currentPage - 1)} className="px-1.5 disabled:opacity-35" aria-label="Página anterior">‹</button>
+                          <span className="px-1 whitespace-nowrap">Pág. {currentPage}/{numPages}</span>
+                          <button type="button" disabled={currentPage >= numPages} onClick={() => jumpToPage(currentPage + 1)} className="px-1.5 disabled:opacity-35" aria-label="Próxima página">›</button>
+                        </div>
+                      )}
+                      <div className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-xl border text-xs font-bold ${isDark ? 'bg-black/30 border-white/10 text-gray-200' : 'bg-white border-gray-200 text-gray-800'}`}>
+                        <button type="button" onClick={() => setZoom(z => Math.max(0.65, Math.round((z - 0.15) * 100) / 100))} className="px-1.5" aria-label="Diminuir zoom">−</button>
+                        <button type="button" onClick={() => setZoom(1)} className="px-1" title="Voltar para 100%">{Math.round(zoom * 100)}%</button>
+                        <button type="button" onClick={() => setZoom(z => Math.min(2.4, Math.round((z + 0.15) * 100) / 100))} className="px-1.5" aria-label="Aumentar zoom">+</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {tool === 'highlight' && !useDriveFallback && (
+                  <div className="px-4 py-1.5 bg-yellow-400/15 border-b border-yellow-400/30 text-[11px] sm:text-xs font-semibold text-yellow-700 dark:text-yellow-200 flex items-center justify-between gap-2 shrink-0">
+                    <span>🖍 Modo Marca-texto ativo: arraste sobre o texto para grifar e salvar automaticamente na sua conta.</span>
+                    <button type="button" onClick={() => setTool('read')} className="underline shrink-0 font-bold">Voltar para Ler</button>
+                  </div>
+                )}
+                {tool === 'erase' && !useDriveFallback && (
+                  <div className="px-4 py-1.5 bg-rose-500/15 border-b border-rose-500/30 text-[11px] sm:text-xs font-semibold text-rose-700 dark:text-rose-200 flex items-center justify-between gap-2 shrink-0">
+                    <span>⌫ Toque em qualquer grifo no PDF para removê-lo.</span>
+                    <button type="button" onClick={() => setTool('read')} className="underline shrink-0 font-bold">Concluir</button>
+                  </div>
+                )}
+
+                {/* Área Principal do PDF */}
+                {useDriveFallback ? (
+                  <div className="flex-1 min-h-0 flex flex-col p-2 sm:p-4 bg-black/20">
+                    <div className="mb-2 flex items-center justify-between gap-2 text-xs text-gray-400">
+                      <span>Exibindo visualizador externo do Google Drive (sem marca-texto interno).</span>
+                      <button type="button" onClick={() => { setUseDriveFallback(false); setReloadTick(t => t + 1); }} className="text-purple-400 underline font-bold">Voltar para leitor interno</button>
+                    </div>
+                    <iframe
+                      key={pdf.id}
+                      src={`https://drive.google.com/file/d/${encodeURIComponent(pdf.id)}/preview`}
+                      title={pdf.title}
+                      className="w-full flex-1 border-0 rounded-xl bg-white"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <div
+                    ref={bodyRef}
+                    onScroll={handleBodyScroll}
+                    className={`flex-1 min-h-0 overflow-auto p-3 sm:p-6 space-y-4 sm:space-y-6 ${isDark ? 'bg-[#0e0e12]' : 'bg-gray-200/80'}`}
+                  >
+                    {loading ? (
+                      <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-center p-6">
+                        <div className="w-10 h-10 rounded-full border-4 border-purple-500 border-t-transparent animate-spin mb-3" />
+                        <div className="text-sm font-bold text-gray-900 dark:text-white">Carregando PDF direto no site…</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Buscando o arquivo do seu Google Drive pelo backend seguro.</div>
+                      </div>
+                    ) : errorMsg ? (
+                      <div className="max-w-lg mx-auto my-8 p-6 rounded-2xl border border-amber-500/35 bg-amber-500/10 text-center space-y-4">
+                        <div className="text-base font-bold text-amber-300">Não foi possível abrir o PDF pelo leitor interno</div>
+                        <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{errorMsg}</p>
+                        <p className="text-[11px] text-gray-400">
+                          Certifique-se de ter colado o <strong>Code.gs atualizado</strong> no Apps Script e publicado uma nova versão (ação <code className="text-purple-300">getAulasPdfData</code>).
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                          <button type="button" onClick={() => setReloadTick(t => t + 1)} className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold">
+                            ↻ Tentar novamente
+                          </button>
+                          <button type="button" onClick={() => setUseDriveFallback(true)} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-bold">
+                            Tentar iframe do Drive
+                          </button>
+                          <a href={`https://drive.google.com/file/d/${pdf.id}/view`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 text-xs font-bold">
+                            Abrir em nova aba ↗
+                          </a>
+                        </div>
+                      </div>
+                    ) : disguisedImageUrl ? (
+                      <div className="max-w-2xl mx-auto my-4 p-4 sm:p-6 rounded-2xl border border-amber-500/35 bg-amber-500/10 text-center space-y-4">
+                        <div className="text-sm sm:text-base font-bold text-amber-300">Este arquivo foi salvo originalmente como imagem (não é um PDF de texto)</div>
+                        <p className="text-xs text-gray-300 leading-relaxed">
+                          Alguns arquivos da origem vieram apenas com a imagem de capa/miniatura (<code className="text-purple-300">.avif</code>) renomeada para <code className="text-purple-300">.pdf</code>. Abaixo está o conteúdo real salvo dentro deste arquivo:
+                        </p>
+                        <div className="rounded-xl overflow-hidden bg-white inline-block max-w-full shadow-lg border border-white/15">
+                          <img src={disguisedImageUrl} alt={pdf.title} className="max-h-[55vh] w-auto object-contain mx-auto" />
+                        </div>
+                      </div>
+                    ) : (
+                      Array.from({ length: numPages }, (_, idx) => {
+                        const pageNumber = idx + 1;
+                        return (
+                          <PdfPageCanvas
+                            key={`${pdf.id}_p_${pageNumber}`}
+                            pdfDoc={pdfDoc}
+                            pageNumber={pageNumber}
+                            zoom={zoom}
+                            containerWidth={containerWidth}
+                            tool={tool}
+                            brushMode={brushMode}
+                            highlightColor={highlightColor}
+                            highlights={highlightsByPage.get(pageNumber) || []}
+                            onAddHighlight={onAddHighlight}
+                            onDeleteHighlight={onDeleteHighlight}
+                            registerPageEl={registerPageEl}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
         const App = () => {
           // Cada área mantém uma autenticação de sessão própria; o acesso ativo também é isolado.
           const [activeAccess, setActiveAccess] = useState(() => {
@@ -2329,6 +3129,337 @@
               setResumosLoading(false);
             }
           };
+
+          // Imersão (Videoaulas e PDFs de apoio no Google Drive)
+          const AULAS_CACHE_KEY = 'hfoqo_aulas_catalog_cache_v1';
+          const AULAS_PROGRESS_KEY = 'hfoqo_aulas_progress_v1';
+
+          function normalizeAulasProgress(raw) {
+            const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+            const videosIn = src.videos && typeof src.videos === 'object' && !Array.isArray(src.videos) ? src.videos : {};
+            const pdfsIn = src.pdfs && typeof src.pdfs === 'object' && !Array.isArray(src.pdfs) ? src.pdfs : {};
+            const videos = {};
+            Object.keys(videosIn).forEach((vid) => {
+              const item = videosIn[vid];
+              if (!item || typeof item !== 'object') return;
+              const status = item.status === 'completed' ? 'completed' : item.status === 'watching' ? 'watching' : '';
+              if (!status) return;
+              videos[String(vid)] = {
+                status,
+                startedAt: String(item.startedAt || item.updatedAt || ''),
+                updatedAt: String(item.updatedAt || item.completedAt || item.startedAt || ''),
+                completedAt: status === 'completed' ? String(item.completedAt || item.updatedAt || '') : '',
+                title: String(item.title || ''),
+                folderId: String(item.folderId || ''),
+                folderName: String(item.folderName || ''),
+                specialtyId: String(item.specialtyId || ''),
+                specialtyName: String(item.specialtyName || '')
+              };
+            });
+            const pdfs = {};
+            Object.keys(pdfsIn).forEach((pid) => {
+              const item = pdfsIn[pid];
+              if (!item || typeof item !== 'object') return;
+              const openedAt = String(item.openedAt || '');
+              const highlights = sanitizePdfHighlights(item.highlights);
+              const highlightsUpdatedAt = String(item.highlightsUpdatedAt || '');
+              if (openedAt || highlights.length || highlightsUpdatedAt) {
+                pdfs[String(pid)] = { openedAt, highlights, highlightsUpdatedAt };
+              }
+            });
+            const lastIn = src.lastOpened && typeof src.lastOpened === 'object' ? src.lastOpened : null;
+            const lastOpened = lastIn && lastIn.videoId ? {
+              specialtyId: String(lastIn.specialtyId || ''),
+              folderId: String(lastIn.folderId || ''),
+              videoId: String(lastIn.videoId || ''),
+              title: String(lastIn.title || ''),
+              folderName: String(lastIn.folderName || ''),
+              specialtyName: String(lastIn.specialtyName || ''),
+              updatedAt: String(lastIn.updatedAt || '')
+            } : null;
+            return { videos, pdfs, lastOpened };
+          }
+
+          function mergeAulasProgress(localRaw, remoteRaw) {
+            const a = normalizeAulasProgress(localRaw);
+            const b = normalizeAulasProgress(remoteRaw);
+            const videos = { ...a.videos };
+            Object.keys(b.videos).forEach((vid) => {
+              const cur = videos[vid];
+              const inc = b.videos[vid];
+              if (!cur) { videos[vid] = inc; return; }
+              const ta = Date.parse(cur.updatedAt || '') || 0;
+              const tb = Date.parse(inc.updatedAt || '') || 0;
+              if (tb > ta) videos[vid] = inc;
+              else if (tb === ta && inc.status === 'completed' && cur.status !== 'completed') videos[vid] = inc;
+            });
+            const pdfs = {};
+            const allPdfIds = new Set([...Object.keys(a.pdfs), ...Object.keys(b.pdfs)]);
+            allPdfIds.forEach((pid) => {
+              const pa = a.pdfs[pid];
+              const pb = b.pdfs[pid];
+              if (!pa) { pdfs[pid] = pb; return; }
+              if (!pb) { pdfs[pid] = pa; return; }
+              const taOpen = Date.parse(pa.openedAt || '') || 0;
+              const tbOpen = Date.parse(pb.openedAt || '') || 0;
+              const taHl = Date.parse(pa.highlightsUpdatedAt || '') || 0;
+              const tbHl = Date.parse(pb.highlightsUpdatedAt || '') || 0;
+              const chosenHl = tbHl > taHl
+                ? pb
+                : (taHl > tbHl ? pa : ((pb.highlights?.length || 0) > (pa.highlights?.length || 0) ? pb : pa));
+              pdfs[pid] = {
+                openedAt: tbOpen >= taOpen ? (pb.openedAt || pa.openedAt) : (pa.openedAt || pb.openedAt),
+                highlights: Array.isArray(chosenHl.highlights) ? chosenHl.highlights : [],
+                highlightsUpdatedAt: chosenHl.highlightsUpdatedAt || pa.highlightsUpdatedAt || pb.highlightsUpdatedAt || ''
+              };
+            });
+            const lastA = a.lastOpened;
+            const lastB = b.lastOpened;
+            let lastOpened = lastA || lastB || null;
+            if (lastA && lastB) {
+              const ta = Date.parse(lastA.updatedAt || '') || 0;
+              const tb = Date.parse(lastB.updatedAt || '') || 0;
+              lastOpened = tb >= ta ? lastB : lastA;
+            }
+            return { videos, pdfs, lastOpened };
+          }
+
+          const [aulasCatalog, setAulasCatalog] = useState(() => {
+            try {
+              const cached = JSON.parse(localStorage.getItem(AULAS_CACHE_KEY) || '{}');
+              if (cached?.catalog && Array.isArray(cached.catalog.specialties)) return cached.catalog;
+            } catch {}
+            return {
+              version: 1, syncedAt: '', folderId: '', folderName: 'HZ MED - Aulas', folderUrl: '',
+              resolvedRootName: '', totalVideos: 0, totalPdfs: 0, totalFolders: 0,
+              specialties: [], globalPdfs: []
+            };
+          });
+          const [aulasLoading, setAulasLoading] = useState(false);
+          const [aulasSyncing, setAulasSyncing] = useState(false);
+          const [aulasSyncMessage, setAulasSyncMessage] = useState('');
+          const [aulasSyncError, setAulasSyncError] = useState(false);
+          const aulasSyncInFlightRef = React.useRef(false);
+          const aulasLoginSyncedRef = React.useRef(false);
+          const [showAulasFolderConfig, setShowAulasFolderConfig] = useState(false);
+          const [aulasFolderInput, setAulasFolderInput] = useState('');
+          const [aulasProgress, setAulasProgress] = useState(() => {
+            try { return normalizeAulasProgress(JSON.parse(localStorage.getItem(AULAS_PROGRESS_KEY) || '{}')); }
+            catch { return normalizeAulasProgress({}); }
+          });
+
+          const loadAulasCatalog = async ({ manual = false, forceRefresh = false, silent = false } = {}) => {
+            if (aulasSyncInFlightRef.current) {
+              if (manual) {
+                setAulasSyncError(false);
+                setAulasSyncMessage('A sincronização da Imersão já está em andamento.');
+              }
+              return false;
+            }
+            aulasSyncInFlightRef.current = true;
+            setAulasSyncing(true);
+            if (manual) {
+              setAulasSyncError(false);
+              setAulasSyncMessage(forceRefresh ? 'Lendo pastas, vídeos e PDFs do Google Drive…' : 'Atualizando catálogo de aulas…');
+            }
+            if (!(aulasCatalog?.specialties?.length > 0)) setAulasLoading(true);
+            try {
+              const action = forceRefresh ? 'syncAulasDrive' : 'getAulasCatalog';
+              const res = await liveApi(action, {}, forceRefresh ? 180000 : 60000);
+              if (!res || res.ok === false || !res.catalog) {
+                throw new Error(res?.error || 'O servidor não retornou o catálogo da Imersão.');
+              }
+              setAulasCatalog(res.catalog);
+              try {
+                localStorage.setItem(AULAS_CACHE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), catalog: res.catalog }));
+              } catch (cacheErr) {
+                console.warn('Catálogo de aulas atualizado, mas cache local não pôde ser salvo:', cacheErr);
+              }
+              if (manual) {
+                setAulasSyncError(false);
+                const c = res.catalog;
+                setAulasSyncMessage(`Sincronizado: ${c.totalVideos || 0} aulas e ${c.totalPdfs || 0} PDFs (${c.folderName || 'Drive'}).`);
+              } else if (silent && forceRefresh) {
+                setAulasSyncError(false);
+                setAulasSyncMessage(prev => (prev && prev.startsWith('Não foi possível') ? '' : prev));
+              }
+              return true;
+            } catch (err) {
+              console.warn('Erro ao carregar catálogo de aulas do Drive:', err);
+              if (manual && !silent) {
+                setAulasSyncError(true);
+                setAulasSyncMessage(`Não foi possível sincronizar: ${err?.message || 'erro de conexão'}`);
+              }
+              return false;
+            } finally {
+              aulasSyncInFlightRef.current = false;
+              setAulasSyncing(false);
+              setAulasLoading(false);
+            }
+          };
+
+          const saveAulasDriveFolder = async (folderUrlOrId) => {
+            const clean = String(folderUrlOrId || '').trim();
+            if (!clean) {
+              setAulasSyncError(true);
+              setAulasSyncMessage('Cole o link ou ID da pasta do Google Drive.');
+              return false;
+            }
+            if (aulasSyncInFlightRef.current) return false;
+            aulasSyncInFlightRef.current = true;
+            setAulasSyncing(true);
+            setAulasSyncError(false);
+            setAulasSyncMessage('Vinculando pasta do Google Drive e indexando aulas…');
+            try {
+              const res = await liveApi('setAulasDriveFolder', { folderUrlOrId: clean }, 180000);
+              if (!res || res.ok === false || !res.catalog) {
+                throw new Error(res?.error || 'Não foi possível vincular a pasta informada.');
+              }
+              setAulasCatalog(res.catalog);
+              try {
+                localStorage.setItem(AULAS_CACHE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), catalog: res.catalog }));
+              } catch {}
+              setAulasSyncError(false);
+              setAulasSyncMessage(`Pasta vinculada: ${res.catalog.totalVideos || 0} aulas e ${res.catalog.totalPdfs || 0} PDFs encontrados.`);
+              return true;
+            } catch (err) {
+              setAulasSyncError(true);
+              setAulasSyncMessage(err?.message || 'Erro ao vincular pasta do Drive.');
+              return false;
+            } finally {
+              aulasSyncInFlightRef.current = false;
+              setAulasSyncing(false);
+            }
+          };
+
+          const updateVideoWatchState = (video, targetStatus, contextMeta = {}) => {
+            if (!video || !video.id) return;
+            const vid = String(video.id);
+            const now = new Date().toISOString();
+            setAulasProgress(prev => {
+              const base = normalizeAulasProgress(prev);
+              const existing = base.videos[vid];
+              // Abrir novamente uma aula já concluída não rebaixa do verde para o amarelo, a menos que forced.
+              let nextStatus = targetStatus;
+              if (targetStatus === 'watching' && !contextMeta.force && existing?.status === 'completed') {
+                nextStatus = 'completed';
+              }
+              const nextVideos = { ...base.videos };
+              if (nextStatus === 'reset') {
+                delete nextVideos[vid];
+              } else {
+                nextVideos[vid] = {
+                  status: nextStatus,
+                  startedAt: existing?.startedAt || now,
+                  updatedAt: now,
+                  completedAt: nextStatus === 'completed' ? (existing?.completedAt || now) : '',
+                  title: String(video.title || existing?.title || ''),
+                  folderId: String(contextMeta.folderId || existing?.folderId || ''),
+                  folderName: String(contextMeta.folderName || existing?.folderName || ''),
+                  specialtyId: String(contextMeta.specialtyId || existing?.specialtyId || ''),
+                  specialtyName: String(contextMeta.specialtyName || existing?.specialtyName || '')
+                };
+              }
+              return {
+                ...base,
+                videos: nextVideos,
+                lastOpened: nextStatus === 'reset' ? base.lastOpened : {
+                  specialtyId: String(contextMeta.specialtyId || base.lastOpened?.specialtyId || ''),
+                  folderId: String(contextMeta.folderId || base.lastOpened?.folderId || ''),
+                  videoId: vid,
+                  title: String(video.title || ''),
+                  folderName: String(contextMeta.folderName || ''),
+                  specialtyName: String(contextMeta.specialtyName || ''),
+                  updatedAt: now
+                }
+              };
+            });
+          };
+
+          const markPdfOpened = (pdf) => {
+            if (!pdf || !pdf.id) return;
+            const pid = String(pdf.id);
+            const now = new Date().toISOString();
+            setAulasProgress(prev => {
+              const base = normalizeAulasProgress(prev);
+              const existing = base.pdfs[pid] || {};
+              return {
+                ...base,
+                pdfs: {
+                  ...base.pdfs,
+                  [pid]: {
+                    openedAt: now,
+                    highlights: Array.isArray(existing.highlights) ? existing.highlights : [],
+                    highlightsUpdatedAt: existing.highlightsUpdatedAt || ''
+                  }
+                }
+              };
+            });
+          };
+
+          const updatePdfHighlights = (pdfId, updater) => {
+            const pid = String(pdfId || '').trim();
+            if (!pid) return;
+            const now = new Date().toISOString();
+            setAulasProgress(prev => {
+              const base = normalizeAulasProgress(prev);
+              const existing = base.pdfs[pid] || { openedAt: now, highlights: [], highlightsUpdatedAt: '' };
+              const nextHighlights = sanitizePdfHighlights(
+                typeof updater === 'function' ? updater(existing.highlights || []) : updater
+              );
+              return {
+                ...base,
+                pdfs: {
+                  ...base.pdfs,
+                  [pid]: {
+                    openedAt: existing.openedAt || now,
+                    highlights: nextHighlights,
+                    highlightsUpdatedAt: now
+                  }
+                }
+              };
+            });
+          };
+
+          useEffect(() => {
+            try {
+              const value = JSON.stringify(aulasProgress);
+              if (localStorage.getItem(AULAS_PROGRESS_KEY) !== value) {
+                localStorage.setItem(AULAS_PROGRESS_KEY, value);
+                notifyHfoqoCloudSyncNeeded();
+              }
+            } catch {}
+          }, [aulasProgress]);
+
+          useEffect(() => {
+            if (activeAccess !== 'main') {
+              aulasLoginSyncedRef.current = false;
+              return undefined;
+            }
+            if (aulasLoginSyncedRef.current) return undefined;
+            aulasLoginSyncedRef.current = true;
+            let cancelled = false;
+            let timer = null;
+            (async () => {
+              await loadAulasCatalog({ manual: false, forceRefresh: false, silent: true });
+              if (cancelled) return;
+              timer = setTimeout(() => {
+                if (!cancelled) {
+                  loadAulasCatalog({ manual: false, forceRefresh: true, silent: true });
+                }
+              }, 350);
+            })();
+            return () => {
+              cancelled = true;
+              if (timer) clearTimeout(timer);
+            };
+          }, [activeAccess]);
+
+          useEffect(() => {
+            if (activeAccess === 'main' && currentView === 'aulas' && !(aulasCatalog?.specialties?.length > 0) && !aulasSyncInFlightRef.current) {
+              loadAulasCatalog({ manual: false, forceRefresh: false, silent: true });
+            }
+          }, [activeAccess, currentView]);
 
           // Estados de navegação interna
           const [activeTema, setActiveTema] = useState(null);
@@ -2620,7 +3751,7 @@
               storage,
               appState: {
                 startDate, examDate, dailyQuestionGoal, dailyPlan, activeRound, bancoActiveRound, isDark, desafioSettings,
-                bibliotecaStatus, completedQuestionIds, completedImmersaoQuestionIds,
+                bibliotecaStatus, aulasProgress, completedQuestionIds, completedImmersaoQuestionIds,
                 completedThemeHistory, desafioThemeHistory, desafioKnownQuestionIds, desafioLimboQuestionIds,
                 trilhaLimboQuestionIds, activityLog, limboList, limboSelections
               }
@@ -2685,6 +3816,7 @@
             const arr = (value, fallback = []) => Array.isArray(value) ? value : fallback;
             const obj = (value, fallback = {}) => value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
             setBibliotecaStatus(obj(a.bibliotecaStatus, fromStorage('hfoqo_biblioteca_status', bibliotecaStatus)));
+            setAulasProgress(prev => mergeAulasProgress(prev, obj(a.aulasProgress, fromStorage('hfoqo_aulas_progress_v1', {}))));
             setCompletedQuestionIds(arr(a.completedQuestionIds, fromStorage('hfoqo_completed_questions', completedQuestionIds)).map(String));
             setCompletedImmersaoQuestionIds(arr(a.completedImmersaoQuestionIds, fromStorage('hfoqo_completed_immersao_questions', completedImmersaoQuestionIds)).map(String));
             setCompletedThemeHistory(arr(a.completedThemeHistory, fromStorage('hfoqo_completed_theme_history', completedThemeHistory)).map(String).filter(id => String(id).startsWith('topic:')));
@@ -3445,7 +4577,7 @@
           useEffect(() => {
             if (!cloudSyncReady) return;
             cloudSyncFunctionsRef.current.queue?.(1600);
-          }, [cloudSyncReady, bibliotecaStatus, completedQuestionIds, completedImmersaoQuestionIds,
+          }, [cloudSyncReady, bibliotecaStatus, aulasProgress, completedQuestionIds, completedImmersaoQuestionIds,
               completedThemeHistory, desafioThemeHistory, desafioKnownQuestionIds, desafioLimboQuestionIds,
               trilhaLimboQuestionIds, activityLog, limboList, limboSelections,
               bancoCompletedQuestionIds, simuladosGeralCompletedQuestionIds, bancoActivityLog, bancoLimboRecords, bancoActiveRound,
@@ -4674,6 +5806,97 @@
                       <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">Toque no status para conferir novas questões e sincronizar agora.</p>
                     </div>
 
+                    <div className="p-4 rounded-xl border border-gray-200 dark:border-[#333] bg-gray-50 dark:bg-[#202020] space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-gray-800 dark:text-gray-100">Imersão · Videoaulas (Drive)</p>
+                          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            {aulasCatalog?.totalVideos || 0} aulas · {aulasCatalog?.totalPdfs || 0} PDFs · Verifica aulas novas automaticamente ao entrar.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {aulasCatalog?.folderUrl && (
+                          <a
+                            href={aulasCatalog.folderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-gray-200 dark:border-[#353535] bg-white dark:bg-[#282828] text-gray-800 dark:text-gray-100 hover:border-purple-500/60 transition-colors"
+                          >
+                            <Icons.Folder /> <span>{aulasCatalog.folderName || 'HZ MED - Aulas'}</span> <Icons.ExternalLink />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => { setShowAulasFolderConfig(v => !v); setAulasFolderInput(aulasCatalog?.folderUrl || ''); }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                            showAulasFolderConfig
+                              ? 'border-purple-500 bg-purple-600/15 text-purple-600 dark:text-purple-300'
+                              : 'border-gray-200 dark:border-[#353535] bg-white dark:bg-[#282828] text-gray-800 dark:text-gray-100 hover:border-purple-500/60'
+                          }`}
+                        >
+                          <Icons.Settings /> Pasta Drive
+                        </button>
+                        <button
+                          type="button"
+                          disabled={aulasSyncing}
+                          onClick={() => loadAulasCatalog({ manual: true, forceRefresh: true })}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-black shadow-sm transition-colors"
+                        >
+                          <span className={aulasSyncing ? 'inline-block animate-spin' : 'inline-flex'}><Icons.Refresh /></span>
+                          <span>{aulasSyncing ? 'Sincronizando…' : 'Sincronizar Drive'}</span>
+                        </button>
+                      </div>
+
+                      {aulasSyncMessage && (
+                        <p role="status" className={`text-xs break-words ${aulasSyncError ? 'text-red-600 dark:text-red-300' : 'text-purple-700 dark:text-purple-300'}`}>
+                          {aulasSyncMessage}
+                        </p>
+                      )}
+
+                      {showAulasFolderConfig && (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            const ok = await saveAulasDriveFolder(aulasFolderInput);
+                            if (ok) { setShowAulasFolderConfig(false); setAulasFolderInput(''); }
+                          }}
+                          className="pt-2 border-t border-gray-200 dark:border-[#333] space-y-2.5"
+                        >
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                            Link completo ou ID da pasta do Drive
+                          </label>
+                          <input
+                            type="text"
+                            value={aulasFolderInput}
+                            onChange={e => setAulasFolderInput(e.target.value)}
+                            placeholder="https://drive.google.com/drive/folders/..."
+                            className="w-full rounded-xl px-3 py-2 text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
+                          />
+                          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                            Execute <code className="px-1 py-0.5 rounded bg-purple-500/15 text-purple-500 dark:text-purple-300">setupAulasDrive()</code> no Apps Script para criar <strong>HZ MED - Aulas</strong> ou cole outro link acima. Para qualidade HD direta sem player do Drive, compartilhe a pasta como leitor via link.
+                          </p>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowAulasFolderConfig(false)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200 dark:bg-[#2d2d2d] text-gray-700 dark:text-gray-200"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={aulasSyncing}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white"
+                            >
+                              {aulasSyncing ? 'Sincronizando…' : 'Vincular e Sincronizar'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Início dos Estudos</label>
                       <input 
@@ -5279,7 +6502,8 @@
               { id: 'trilha', label: 'Trilha de questões', icon: <Icons.Book /> },
               { id: 'limbo', label: 'Limbo de questões', icon: <Icons.Layers /> },
               { id: 'desafio', label: 'Desafios diários', icon: <Icons.Target />, locked: desafioLocked, lockReason: desafioLockReason },
-              { id: 'imersoes', label: 'Imersões', icon: <Icons.Play /> },
+              { id: 'imersoes', label: 'Banco BQHZ', icon: <Icons.Database /> },
+              { id: 'aulas', label: 'Imersão', icon: <Icons.Play /> },
               { id: 'metricas', label: 'Métricas', icon: <Icons.BarChart /> },
               { id: 'diagnostico', label: 'Diagnóstico', icon: <Icons.Target /> },
               { id: 'biblioteca', label: 'Biblioteca de Resumos', icon: <Icons.Archive /> },
@@ -6371,7 +7595,7 @@
 
                   <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Imersões <span className="text-purple-600">do banco</span></h2>
+                      <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Banco <span className="text-purple-600">BQHZ</span></h2>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Verde = estudado ✅ · vermelho = não iniciado ⌛ · roxo = possui questões no Limbo 🚨</p>
                     </div>
                     <div className="px-4 py-2 rounded-2xl bg-purple-500/10 text-purple-500 font-bold text-sm whitespace-nowrap self-start lg:self-auto">{immersionStats.themes} temas</div>
@@ -6556,6 +7780,1756 @@
           const MetricCard = ({label,value,sub,accent='purple'}) => {
             const cls = accent==='green' ? 'text-green-500 bg-green-500/10' : accent==='red' ? 'text-red-500 bg-red-500/10' : accent==='blue' ? 'text-blue-500 bg-blue-500/10' : 'text-purple-500 bg-purple-500/10';
             return <div className={`rounded-[22px] p-5 ${isDark?'bg-[#1E1E1E] border border-[#2A2A2A]':'bg-white border border-gray-200 shadow-sm'}`}><div className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${cls}`}>{label}</div><div className="text-3xl font-black text-gray-900 dark:text-white mt-4">{value}</div>{sub && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{sub}</div>}</div>;
+          };
+
+          const AULAS_SPECIALTY_COLORS = {
+            CIR: { badge: 'bg-rose-500/15 text-rose-400 border-rose-500/30', lightBadge: 'bg-rose-100 text-rose-700 border-rose-200', accent: 'from-rose-500 to-orange-500' },
+            CM: { badge: 'bg-sky-500/15 text-sky-400 border-sky-500/30', lightBadge: 'bg-sky-100 text-sky-700 border-sky-200', accent: 'from-sky-500 to-cyan-500' },
+            GO: { badge: 'bg-pink-500/15 text-pink-400 border-pink-500/30', lightBadge: 'bg-pink-100 text-pink-700 border-pink-200', accent: 'from-pink-500 to-fuchsia-500' },
+            MFC: { badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30', lightBadge: 'bg-amber-100 text-amber-800 border-amber-200', accent: 'from-amber-500 to-yellow-500' },
+            PED: { badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', lightBadge: 'bg-emerald-100 text-emerald-700 border-emerald-200', accent: 'from-emerald-500 to-teal-500' },
+            SC: { badge: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30', lightBadge: 'bg-indigo-100 text-indigo-700 border-indigo-200', accent: 'from-indigo-500 to-purple-500' },
+            SM: { badge: 'bg-violet-500/15 text-violet-400 border-violet-500/30', lightBadge: 'bg-violet-100 text-violet-700 border-violet-200', accent: 'from-violet-500 to-purple-600' },
+          };
+
+          const getAulasBadgeClass = (tag) => {
+            const entry = AULAS_SPECIALTY_COLORS[String(tag || '').toUpperCase()];
+            if (entry) return isDark ? entry.badge : entry.lightBadge;
+            return isDark ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' : 'bg-purple-100 text-purple-700 border-purple-200';
+          };
+
+          const AulasView = () => {
+            const [subTab, setSubTab] = useState('playlists'); // 'playlists' | 'watching' | 'pdfs'
+            const [selectedSpecialtyId, setSelectedSpecialtyId] = useState('');
+            const [selectedFolderId, setSelectedFolderId] = useState('');
+            const [folderDropdownOpen, setFolderDropdownOpen] = useState(false);
+            const [globalSearch, setGlobalSearch] = useState('');
+            const [folderSearch, setFolderSearch] = useState('');
+            const [lessonSearch, setLessonSearch] = useState('');
+            const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'not_started' | 'watching' | 'completed'
+            const [themeFilter, setThemeFilter] = useState('all');
+            const [displayMode, setDisplayMode] = useState('trilha'); // 'trilha' | 'lista'
+            const [pdfSearch, setPdfSearch] = useState('');
+            const [activeVideoSession, setActiveVideoSession] = useState(null); // { videos, index, sourceLabel }
+            const [activePdfModal, setActivePdfModal] = useState(null); // { id, title, subtitle }
+            const [playerMode, setPlayerMode] = useState(() => {
+              try { return localStorage.getItem('hfoqo_aulas_player_mode_v1') === 'hd' ? 'hd' : 'drive'; }
+              catch { return 'drive'; }
+            });
+            const [hdAttempt, setHdAttempt] = useState(0);
+            const [hdNotice, setHdNotice] = useState('');
+            const [playbackRate, setPlaybackRate] = useState(1);
+            const [cinemaMode, setCinemaMode] = useState(false);
+            const [mobilePlayerTab, setMobilePlayerTab] = useState('controls'); // 'controls' | 'playlist'
+            const hdVideoRef = React.useRef(null);
+            const trilhaRailRef = React.useRef(null);
+            const dropdownWrapRef = React.useRef(null);
+
+            const currentModalVideoId = activeVideoSession?.videos?.[activeVideoSession.index]?.id || '';
+
+            useEffect(() => {
+              try { localStorage.setItem('hfoqo_aulas_player_mode_v1', playerMode); } catch {}
+            }, [playerMode]);
+
+            useEffect(() => {
+              setHdAttempt(0);
+              setHdNotice('');
+            }, [currentModalVideoId]);
+
+            useEffect(() => {
+              if (!activeVideoSession) setMobilePlayerTab('controls');
+            }, [Boolean(activeVideoSession)]);
+
+            useEffect(() => {
+              if (playerMode === 'hd' && hdVideoRef.current) {
+                try { hdVideoRef.current.playbackRate = playbackRate; } catch {}
+              }
+            }, [playbackRate, playerMode, currentModalVideoId]);
+
+            const specialties = Array.isArray(aulasCatalog?.specialties) ? aulasCatalog.specialties : [];
+            const globalPdfs = Array.isArray(aulasCatalog?.globalPdfs) ? aulasCatalog.globalPdfs : [];
+            const videoMap = aulasProgress?.videos || {};
+            const pdfMap = aulasProgress?.pdfs || {};
+
+            const getVideoStatus = (videoId) => videoMap[String(videoId)]?.status || 'not_started';
+
+            const computeFolderStats = (folder) => {
+              const vids = Array.isArray(folder?.videos) ? folder.videos : [];
+              let completed = 0;
+              let watching = 0;
+              vids.forEach(v => {
+                const st = getVideoStatus(v.id);
+                if (st === 'completed') completed++;
+                else if (st === 'watching') watching++;
+              });
+              return { total: vids.length, completed, watching, notStarted: Math.max(0, vids.length - completed - watching), pdfCount: (folder?.pdfs || []).length };
+            };
+
+            const computeSpecialtyStats = (sp) => {
+              const folders = Array.isArray(sp?.folders) ? sp.folders : [];
+              let total = 0;
+              let completed = 0;
+              let watching = 0;
+              let pdfCount = (sp?.directPdfs || []).length;
+              folders.forEach(f => {
+                const st = computeFolderStats(f);
+                total += st.total;
+                completed += st.completed;
+                watching += st.watching;
+                pdfCount += st.pdfCount;
+              });
+              return { foldersCount: folders.length, total, completed, watching, notStarted: Math.max(0, total - completed - watching), pdfCount };
+            };
+
+            const selectedSpecialty = useMemo(
+              () => specialties.find(sp => sp.id === selectedSpecialtyId) || null,
+              [specialties, selectedSpecialtyId]
+            );
+
+            const selectedFolder = useMemo(
+              () => selectedSpecialty?.folders?.find(f => f.id === selectedFolderId) || null,
+              [selectedSpecialty, selectedFolderId]
+            );
+
+            useEffect(() => {
+              try {
+                const mainEl = document.querySelector('main.app-main');
+                if (mainEl) mainEl.scrollTop = 0;
+                window.scrollTo(0, 0);
+              } catch {}
+            }, [selectedSpecialtyId, selectedFolderId, subTab]);
+
+            useEffect(() => {
+              if (!folderDropdownOpen) return undefined;
+              const onDocClick = (e) => {
+                if (dropdownWrapRef.current && !dropdownWrapRef.current.contains(e.target)) {
+                  setFolderDropdownOpen(false);
+                }
+              };
+              document.addEventListener('mousedown', onDocClick);
+              return () => document.removeEventListener('mousedown', onDocClick);
+            }, [folderDropdownOpen]);
+
+            useEffect(() => {
+              const onKeyDown = (e) => {
+                if (e.key !== 'Escape') return;
+                if (activePdfModal) { setActivePdfModal(null); return; }
+                if (activeVideoSession) { setActiveVideoSession(null); return; }
+                if (folderDropdownOpen) setFolderDropdownOpen(false);
+              };
+              window.addEventListener('keydown', onKeyDown);
+              return () => window.removeEventListener('keydown', onKeyDown);
+            }, [activePdfModal, activeVideoSession, folderDropdownOpen]);
+
+            const openSpecialty = (sp) => {
+              if (!sp) return;
+              setSubTab('playlists');
+              setSelectedSpecialtyId(sp.id);
+              setFolderSearch('');
+              setLessonSearch('');
+              setStatusFilter('all');
+              setThemeFilter('all');
+              setFolderDropdownOpen(false);
+              if (Array.isArray(sp.folders) && sp.folders.length === 1) {
+                setSelectedFolderId(sp.folders[0].id);
+              } else {
+                setSelectedFolderId('');
+              }
+            };
+
+            const openFolder = (sp, folder) => {
+              if (!sp || !folder) return;
+              setSubTab('playlists');
+              setSelectedSpecialtyId(sp.id);
+              setSelectedFolderId(folder.id);
+              setLessonSearch('');
+              setStatusFilter('all');
+              setThemeFilter('all');
+              setFolderDropdownOpen(false);
+              if (trilhaRailRef.current) trilhaRailRef.current.scrollLeft = 0;
+            };
+
+            const startPlaylist = (items, startIndex, sourceLabel) => {
+              if (!Array.isArray(items) || !items.length) return;
+              const idx = Math.max(0, Math.min(startIndex || 0, items.length - 1));
+              const target = items[idx];
+              updateVideoWatchState(target, 'watching', {
+                specialtyId: target.specialtyId,
+                specialtyName: target.specialtyName,
+                folderId: target.folderId,
+                folderName: target.folderName
+              });
+              setActiveVideoSession({ videos: items, index: idx, sourceLabel: sourceLabel || 'Playlist' });
+            };
+
+            const buildFolderPlaylistItems = (sp, folder) => {
+              const folderPdfs = [
+                ...(folder?.pdfs || []).map(p => ({ ...p, originLabel: folder?.name || '' })),
+                ...(sp?.directPdfs || []).map(p => ({ ...p, originLabel: sp?.name || '' }))
+              ];
+              return (folder?.videos || []).map(v => ({
+                ...v,
+                folderId: folder.id,
+                folderName: folder.name,
+                specialtyId: sp.id,
+                specialtyName: sp.name,
+                shortTag: folder.shortTag || sp.shortTag || 'HZ',
+                pdfs: folderPdfs
+              }));
+            };
+
+            const startFolderPlaylistFromVideo = (sp, folder, videoId = null) => {
+              const items = buildFolderPlaylistItems(sp, folder);
+              if (!items.length) return;
+              let idx = 0;
+              if (videoId) {
+                const found = items.findIndex(v => String(v.id) === String(videoId));
+                if (found >= 0) idx = found;
+              } else {
+                const watchingIdx = items.findIndex(v => getVideoStatus(v.id) === 'watching');
+                const unwatchedIdx = items.findIndex(v => getVideoStatus(v.id) === 'not_started');
+                idx = watchingIdx >= 0 ? watchingIdx : unwatchedIdx >= 0 ? unwatchedIdx : 0;
+              }
+              startPlaylist(items, idx, `${sp.name} · ${folder.name}`);
+            };
+
+            const startSpecialtyPlaylist = (sp) => {
+              if (!sp) return;
+              const allItems = [];
+              (sp.folders || []).forEach(f => {
+                buildFolderPlaylistItems(sp, f).forEach(v => allItems.push(v));
+              });
+              if (!allItems.length) return;
+              const watchingIdx = allItems.findIndex(v => getVideoStatus(v.id) === 'watching');
+              const unwatchedIdx = allItems.findIndex(v => getVideoStatus(v.id) === 'not_started');
+              const idx = watchingIdx >= 0 ? watchingIdx : unwatchedIdx >= 0 ? unwatchedIdx : 0;
+              startPlaylist(allItems, idx, `Playlist completa · ${sp.name}`);
+            };
+
+            const openPdfPreview = (pdf, subtitle = '') => {
+              if (!pdf || !pdf.id) return;
+              markPdfOpened(pdf);
+              setActivePdfModal({ id: pdf.id, title: pdf.title || 'Material de apoio', subtitle });
+            };
+
+            const overallStats = useMemo(() => {
+              let total = 0, completed = 0, watching = 0, pdfCount = globalPdfs.length;
+              specialties.forEach(sp => {
+                const s = computeSpecialtyStats(sp);
+                total += s.total;
+                completed += s.completed;
+                watching += s.watching;
+                pdfCount += s.pdfCount;
+              });
+              return { total, completed, watching, pdfCount };
+            }, [specialties, globalPdfs, aulasProgress]);
+
+            const watchingList = useMemo(() => {
+              const out = [];
+              specialties.forEach(sp => {
+                (sp.folders || []).forEach(folder => {
+                  (folder.videos || []).forEach(v => {
+                    if (getVideoStatus(v.id) === 'watching') {
+                      out.push({
+                        video: v,
+                        specialty: sp,
+                        folder,
+                        updatedAt: videoMap[String(v.id)]?.updatedAt || ''
+                      });
+                    }
+                  });
+                });
+              });
+              out.sort((a, b) => (Date.parse(b.updatedAt || '') || 0) - (Date.parse(a.updatedAt || '') || 0));
+              return out;
+            }, [specialties, aulasProgress]);
+
+            const allPdfsGrouped = useMemo(() => {
+              const q = pdfSearch.trim().toLowerCase();
+              const groups = [];
+              specialties.forEach(sp => {
+                const direct = (sp.directPdfs || []).filter(p => !q || String(p.title || '').toLowerCase().includes(q) || sp.name.toLowerCase().includes(q));
+                if (direct.length) {
+                  groups.push({ id: `${sp.id}_direct`, title: sp.name, subtitle: 'Materiais gerais da especialidade', tag: sp.shortTag, items: direct });
+                }
+                (sp.folders || []).forEach(folder => {
+                  const items = (folder.pdfs || []).filter(p => !q || String(p.title || '').toLowerCase().includes(q) || folder.name.toLowerCase().includes(q) || sp.name.toLowerCase().includes(q));
+                  if (items.length) {
+                    groups.push({ id: folder.id, title: `${sp.name} · ${folder.name}`, subtitle: `${items.length} PDF(s)`, tag: sp.shortTag, items, sp, folder });
+                  }
+                });
+              });
+              const filteredGlobal = globalPdfs.filter(p => !q || String(p.title || '').toLowerCase().includes(q) || String(p.category || '').toLowerCase().includes(q));
+              if (filteredGlobal.length) {
+                groups.push({ id: 'global_pdfs', title: 'Hack INEP e Materiais Gerais', subtitle: `${filteredGlobal.length} PDF(s)`, tag: 'HACK', items: filteredGlobal });
+              }
+              return groups;
+            }, [specialties, globalPdfs, pdfSearch]);
+
+            const globalSearchMatches = useMemo(() => {
+              const q = globalSearch.trim().toLowerCase();
+              if (!q || q.length < 2) return null;
+              const folders = [];
+              const lessons = [];
+              specialties.forEach(sp => {
+                (sp.folders || []).forEach(folder => {
+                  if (folder.name.toLowerCase().includes(q) || sp.name.toLowerCase().includes(q)) {
+                    folders.push({ sp, folder, stats: computeFolderStats(folder) });
+                  }
+                  (folder.videos || []).forEach(v => {
+                    if (String(v.title || '').toLowerCase().includes(q) || String(v.theme || '').toLowerCase().includes(q)) {
+                      lessons.push({ sp, folder, video: v });
+                    }
+                  });
+                });
+              });
+              return { folders: folders.slice(0, 12), lessons: lessons.slice(0, 24), totalLessons: lessons.length };
+            }, [globalSearch, specialties, aulasProgress]);
+
+            const navigateBackFromLevel3 = () => {
+              setFolderDropdownOpen(false);
+              if (selectedSpecialty && Array.isArray(selectedSpecialty.folders) && selectedSpecialty.folders.length > 1) {
+                setSelectedFolderId('');
+              } else {
+                setSelectedFolderId('');
+                setSelectedSpecialtyId('');
+              }
+            };
+
+            const renderFolderBadgeClass = (isSelected) => isSelected
+              ? 'bg-purple-600 text-white'
+              : (isDark ? 'bg-[#262626] text-gray-300 hover:bg-[#313131]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50');
+
+            // Renderização dos Modais (Player Streamer + Leitor de PDF + Config Pasta)
+            const renderModals = () => {
+              const currentVideo = activeVideoSession?.videos?.[activeVideoSession.index] || null;
+              const currentStatus = currentVideo ? getVideoStatus(currentVideo.id) : 'not_started';
+              const isCompleted = currentStatus === 'completed';
+              const hasPrev = Boolean(activeVideoSession && activeVideoSession.index > 0);
+              const hasNext = Boolean(activeVideoSession && activeVideoSession.index < activeVideoSession.videos.length - 1);
+
+              const jumpToSessionIndex = (nextIdx) => {
+                if (!activeVideoSession) return;
+                const clamped = Math.max(0, Math.min(nextIdx, activeVideoSession.videos.length - 1));
+                const nextVid = activeVideoSession.videos[clamped];
+                if (!nextVid) return;
+                updateVideoWatchState(nextVid, 'watching', {
+                  specialtyId: nextVid.specialtyId,
+                  specialtyName: nextVid.specialtyName,
+                  folderId: nextVid.folderId,
+                  folderName: nextVid.folderName
+                });
+                setActiveVideoSession(prev => prev ? { ...prev, index: clamped } : null);
+              };
+
+              const completeAndAdvance = () => {
+                if (!currentVideo || !activeVideoSession) return;
+                updateVideoWatchState(currentVideo, 'completed', {
+                  force: true,
+                  specialtyId: currentVideo.specialtyId,
+                  specialtyName: currentVideo.specialtyName,
+                  folderId: currentVideo.folderId,
+                  folderName: currentVideo.folderName
+                });
+                if (hasNext) {
+                  jumpToSessionIndex(activeVideoSession.index + 1);
+                }
+              };
+
+              return (
+                <>
+                  {activeVideoSession && currentVideo && (
+                    <div className="fixed inset-0 z-[260000] bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" role="dialog" aria-modal="true">
+                      <div className="w-full max-w-7xl h-[100dvh] sm:h-[92dvh] rounded-none sm:rounded-3xl bg-[#121216] border border-white/10 text-white shadow-2xl flex flex-col overflow-hidden">
+                        {/* Top Bar do Player */}
+                        <div
+                          className="px-3 sm:px-6 py-3 sm:py-3.5 border-b border-white/10 bg-[#18181d] flex items-center justify-between gap-2 sm:gap-3 shrink-0"
+                          style={{ paddingTop: 'calc(0.75rem + var(--hfoqo-safe-top, 0px))' }}
+                        >
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <span className="px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-black uppercase bg-purple-600/25 text-purple-300 border border-purple-500/30 shrink-0">
+                              {currentVideo.shortTag || 'IMERSÃO'}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-[11px] sm:text-xs text-gray-400 truncate">
+                                {activeVideoSession.sourceLabel} · Aula {String(activeVideoSession.index + 1).padStart(2, '0')} de {String(activeVideoSession.videos.length).padStart(2, '0')}
+                              </div>
+                              <div className="text-xs sm:text-base font-bold text-white truncate">{currentVideo.title}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                            <div className="inline-flex p-0.5 rounded-xl bg-white/10 border border-white/10" role="group" aria-label="Qualidade e modo do player">
+                              <button
+                                type="button"
+                                onClick={() => { setPlayerMode('drive'); setHdNotice(''); }}
+                                title="Player padrão do Google Drive (ajuste na engrenagem ⚙ → 720p/1080p)"
+                                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playerMode === 'drive' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                              >
+                                Drive
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setPlayerMode('hd'); setHdAttempt(0); setHdNotice(''); }}
+                                title="Streaming direto do MP4 original em Full HD 1080p (requer pasta pública via link)"
+                                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playerMode === 'hd' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                              >
+                                HD 1080p
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setCinemaMode(v => !v)}
+                              className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                                cinemaMode
+                                  ? 'bg-purple-600/25 border-purple-500 text-purple-200'
+                                  : 'bg-white/10 border-white/10 text-gray-200 hover:bg-white/15'
+                              }`}
+                              title={cinemaMode ? 'Mostrar lista de aulas ao lado' : 'Expandir vídeo em modo cinema'}
+                            >
+                              {cinemaMode ? 'Playlist' : 'Expandir'}
+                            </button>
+                            <span className={`hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                              isCompleted
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                            }`}>
+                              {isCompleted ? '✓ Concluído' : '● Assistindo'}
+                            </span>
+                            <a
+                              href={`https://drive.google.com/file/d/${currentVideo.id}/view`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-gray-200 transition-colors"
+                              title="Abrir vídeo diretamente no Google Drive"
+                            >
+                              <Icons.ExternalLink /> <span className="hidden md:inline">Abrir no Drive</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setActiveVideoSession(null)}
+                              aria-label="Fechar player"
+                              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-red-500/30 text-gray-200 flex items-center justify-center transition-colors"
+                            >
+                              <Icons.X />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Corpo Principal: Streamer + Sidebar Playlist */}
+                        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+                          {/* Coluna Vídeo + Controles */}
+                          <div className={`flex-1 min-h-0 flex flex-col p-3 sm:p-5 overflow-y-auto ${cinemaMode ? 'items-center' : ''}`}>
+                            <div className={`w-full ${cinemaMode ? 'max-w-5xl' : ''} flex flex-col`}>
+                              <div className="w-full aspect-video max-h-[42dvh] sm:max-h-[58dvh] lg:max-h-[65dvh] bg-black rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 shadow-xl shrink-0 relative">
+                                {playerMode === 'hd' ? (
+                                  <video
+                                    ref={hdVideoRef}
+                                    key={`hd_${currentVideo.id}_${hdAttempt}`}
+                                    src={
+                                      hdAttempt === 0
+                                        ? `https://drive.usercontent.google.com/download?id=${encodeURIComponent(currentVideo.id)}&export=download&confirm=t`
+                                        : `https://drive.google.com/uc?export=download&id=${encodeURIComponent(currentVideo.id)}`
+                                    }
+                                    controls
+                                    autoPlay
+                                    playsInline
+                                    preload="auto"
+                                    onLoadedMetadata={() => {
+                                      if (hdVideoRef.current) {
+                                        try { hdVideoRef.current.playbackRate = playbackRate; } catch {}
+                                      }
+                                      setHdNotice('');
+                                    }}
+                                    onEnded={() => {
+                                      updateVideoWatchState(currentVideo, 'completed', {
+                                        force: true,
+                                        specialtyId: currentVideo.specialtyId,
+                                        specialtyName: currentVideo.specialtyName,
+                                        folderId: currentVideo.folderId,
+                                        folderName: currentVideo.folderName
+                                      });
+                                    }}
+                                    onError={() => {
+                                      if (hdAttempt === 0) {
+                                        setHdAttempt(1);
+                                      } else {
+                                        setPlayerMode('drive');
+                                        setHdNotice('O modo HD 1080p direto exige que a pasta "HZ MED - Aulas" no Drive esteja compartilhada como "Qualquer pessoa com o link (Leitor)" (e vídeos até ~100 MB). No player do Drive abaixo, clique na engrenagem ⚙ → Qualidade → 720p/1080p assim que o Drive finalizar o processamento HD.');
+                                      }
+                                    }}
+                                    className="w-full h-full bg-black object-contain"
+                                  />
+                                ) : (
+                                  <iframe
+                                    key={`drive_${currentVideo.id}`}
+                                    src={`https://drive.google.com/file/d/${encodeURIComponent(currentVideo.id)}/preview`}
+                                    title={currentVideo.title}
+                                    className="w-full h-full border-0"
+                                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                )}
+                              </div>
+
+                              {hdNotice && (
+                                <div className="mt-2.5 px-3.5 py-2.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-200 text-xs flex items-start justify-between gap-2">
+                                  <span>{hdNotice}</span>
+                                  <button type="button" onClick={() => setHdNotice('')} className="shrink-0 opacity-75 hover:opacity-100"><Icons.X /></button>
+                                </div>
+                              )}
+
+                              <div className="mt-2 text-[11px] text-gray-400 flex items-center justify-between gap-2 flex-wrap">
+                                <span>
+                                  {playerMode === 'hd'
+                                    ? 'Modo HD 1080p original · Marcará como concluída automaticamente ao chegar no fim.'
+                                    : 'Dica de qualidade: no player do Drive, clique na engrenagem ⚙ → Qualidade → 720p/1080p (vídeos recém-enviados liberam HD após o Drive processar) ou clique em HD 1080p acima.'}
+                                </span>
+                                {currentVideo.theme && <span className="text-purple-300 font-semibold">Subtema: {currentVideo.theme}</span>}
+                              </div>
+
+                              {playerMode === 'hd' && (
+                                <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] text-gray-400 font-bold mr-1">Velocidade:</span>
+                                  {[1, 1.25, 1.5, 1.75, 2].map(rate => (
+                                    <button
+                                      key={rate}
+                                      type="button"
+                                      onClick={() => setPlaybackRate(rate)}
+                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playbackRate === rate ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}
+                                    >
+                                      {rate}x
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Abas mobile/tablet: alternar entre Controles & PDFs e Playlist sem dupla rolagem apertada */}
+                              <div className="mt-3 lg:hidden grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#1a1a21] border border-white/10">
+                                <button
+                                  type="button"
+                                  onClick={() => setMobilePlayerTab('controls')}
+                                  className={`py-2 rounded-lg text-xs font-bold transition-colors ${mobilePlayerTab === 'controls' ? 'bg-purple-600 text-white' : 'text-gray-300'}`}
+                                >
+                                  Controles &amp; PDFs
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMobilePlayerTab('playlist')}
+                                  className={`py-2 rounded-lg text-xs font-bold transition-colors ${mobilePlayerTab === 'playlist' ? 'bg-purple-600 text-white' : 'text-gray-300'}`}
+                                >
+                                  Playlist ({activeVideoSession.videos.length})
+                                </button>
+                              </div>
+
+                              {/* Barra de Ações do Player (oculta no mobile se a aba Playlist estiver ativa) */}
+                              <div className={mobilePlayerTab === 'playlist' ? 'hidden lg:block' : 'block'}>
+                                <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-2xl bg-[#1a1a21] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateVideoWatchState(currentVideo, isCompleted ? 'watching' : 'completed', {
+                                        force: true,
+                                        specialtyId: currentVideo.specialtyId,
+                                        specialtyName: currentVideo.specialtyName,
+                                        folderId: currentVideo.folderId,
+                                        folderName: currentVideo.folderName
+                                      })}
+                                      className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+                                        isCompleted
+                                          ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.4)] hover:bg-emerald-600'
+                                          : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500 hover:text-white'
+                                      }`}
+                                    >
+                                      <Icons.Check /> {isCompleted ? 'Concluída (Verde)' : 'Marcar como Concluída'}
+                                    </button>
+                                    {isCompleted && (
+                                      <button
+                                        type="button"
+                                        onClick={() => updateVideoWatchState(currentVideo, 'watching', {
+                                          force: true,
+                                          specialtyId: currentVideo.specialtyId,
+                                          specialtyName: currentVideo.specialtyName,
+                                          folderId: currentVideo.folderId,
+                                          folderName: currentVideo.folderName
+                                        })}
+                                        className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl font-bold text-xs bg-amber-400/15 text-amber-300 border border-amber-400/35 hover:bg-amber-400/25 transition-colors text-center"
+                                      >
+                                        ● Voltar para Assistindo
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={!hasPrev}
+                                      onClick={() => jumpToSessionIndex(activeVideoSession.index - 1)}
+                                      className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-35 text-xs font-bold transition-colors text-center"
+                                    >
+                                      ← Anterior
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={!hasNext}
+                                      onClick={() => jumpToSessionIndex(activeVideoSession.index + 1)}
+                                      className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-35 text-xs font-bold transition-colors text-center"
+                                    >
+                                      Próxima →
+                                    </button>
+                                    {hasNext && (
+                                      <button
+                                        type="button"
+                                        onClick={completeAndAdvance}
+                                        className="col-span-2 sm:col-span-1 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs sm:text-sm font-black shadow-lg transition-colors text-center"
+                                      >
+                                        ✓ Concluir e Próxima →
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* PDFs de Apoio rápidos da pasta */}
+                                {Array.isArray(currentVideo.pdfs) && currentVideo.pdfs.length > 0 && (
+                                  <div className="mt-3 sm:mt-4 p-3.5 sm:p-4 rounded-2xl bg-[#18181e] border border-white/10">
+                                    <div className="text-xs font-black uppercase tracking-wider text-purple-300 mb-2.5 flex items-center gap-2">
+                                      <Icons.FileText /> Material de apoio desta pasta ({currentVideo.pdfs.length} PDF{currentVideo.pdfs.length > 1 ? 's' : ''})
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {currentVideo.pdfs.map(pdf => (
+                                        <button
+                                          key={pdf.id}
+                                          type="button"
+                                          onClick={() => openPdfPreview(pdf, `${currentVideo.specialtyName || ''} · ${currentVideo.folderName || ''}`)}
+                                          className="max-w-full px-3 py-2 rounded-xl bg-white/5 hover:bg-purple-600/25 border border-white/10 hover:border-purple-400/50 text-xs font-semibold text-left flex items-center gap-2 transition-colors"
+                                        >
+                                          <span className="text-rose-400 shrink-0">PDF</span>
+                                          <span className="truncate max-w-[240px]">{pdf.title}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Sidebar da Playlist (Desktop sempre visível exceto Modo Cinema; Mobile/Tablet via aba) */}
+                          <div className={`${
+                            mobilePlayerTab === 'playlist'
+                              ? 'flex flex-1 min-h-0'
+                              : cinemaMode
+                                ? 'hidden'
+                                : 'hidden lg:flex'
+                          } w-full lg:w-[350px] xl:w-96 border-t lg:border-t-0 lg:border-l border-white/10 bg-[#15151a] flex-col shrink-0`}>
+                            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                              <div>
+                                <div className="text-xs font-black uppercase tracking-wider text-gray-400">Playlist em sequência</div>
+                                <div className="text-xs text-gray-300 mt-0.5">{activeVideoSession.videos.length} aulas na fila</div>
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] font-bold">
+                                <span className="text-emerald-400">✓ {activeVideoSession.videos.filter(v => getVideoStatus(v.id) === 'completed').length}</span>
+                                <span className="text-amber-400">● {activeVideoSession.videos.filter(v => getVideoStatus(v.id) === 'watching').length}</span>
+                              </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+                              {activeVideoSession.videos.map((vid, idx) => {
+                                const st = getVideoStatus(vid.id);
+                                const isCurrent = idx === activeVideoSession.index;
+                                return (
+                                  <button
+                                    key={`${vid.id}_${idx}`}
+                                    type="button"
+                                    onClick={() => jumpToSessionIndex(idx)}
+                                    className={`w-full text-left p-3 rounded-xl border flex items-start gap-2.5 transition-all ${
+                                      isCurrent
+                                        ? 'bg-purple-600/25 border-purple-500 text-white shadow-md'
+                                        : st === 'completed'
+                                          ? 'bg-emerald-500/5 border-emerald-500/20 text-gray-200 hover:bg-emerald-500/15'
+                                          : st === 'watching'
+                                            ? 'bg-amber-400/5 border-amber-400/25 text-gray-200 hover:bg-amber-400/15'
+                                            : 'bg-white/[0.02] border-white/5 text-gray-300 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <span className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center shrink-0 mt-0.5 ${
+                                      st === 'completed'
+                                        ? 'bg-emerald-500 text-white'
+                                        : st === 'watching'
+                                          ? 'bg-amber-400 text-black'
+                                          : isCurrent
+                                            ? 'bg-purple-500 text-white'
+                                            : 'bg-white/10 text-gray-400'
+                                    }`}>
+                                      {st === 'completed' ? '✓' : st === 'watching' ? '●' : idx + 1}
+                                    </span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-bold leading-snug line-clamp-2">{vid.title}</div>
+                                      <div className="text-[10px] text-gray-400 mt-1 flex items-center justify-between gap-2">
+                                        <span className="truncate">{vid.folderName || ''}{vid.theme ? ` · ${vid.theme}` : ''}</span>
+                                        <span className={st === 'completed' ? 'text-emerald-400 font-bold shrink-0' : st === 'watching' ? 'text-amber-400 font-bold shrink-0' : ''}>
+                                          {st === 'completed' ? 'Concluído' : st === 'watching' ? 'Assistindo' : ''}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activePdfModal && (
+                    <NativePdfReaderModal
+                      pdf={activePdfModal}
+                      isDark={isDark}
+                      highlights={pdfMap[String(activePdfModal.id)]?.highlights || []}
+                      onAddHighlight={(mark) => updatePdfHighlights(activePdfModal.id, prev => [...prev, mark])}
+                      onDeleteHighlight={(markId) => updatePdfHighlights(activePdfModal.id, prev => prev.filter(h => h.id !== markId))}
+                      onUndoHighlight={() => updatePdfHighlights(activePdfModal.id, prev => prev.slice(0, -1))}
+                      onClearHighlights={() => updatePdfHighlights(activePdfModal.id, [])}
+                      onClose={() => setActivePdfModal(null)}
+                      fetchPdfBase64={async (fileId) => {
+                        const res = await liveApi('getAulasPdfData', { fileId }, 90000);
+                        if (!res || res.ok === false || !res.base64) {
+                          throw new Error(res?.error || 'Não foi possível carregar o arquivo PDF pelo Apps Script.');
+                        }
+                        return res;
+                      }}
+                    />
+                  )}
+                </>
+              );
+            };
+
+            // ===============================================================
+            // NÍVEL 3: TRILHA / PLAYLIST DA PASTA (IGUAL ÀS IMAGENS DE REFERÊNCIA)
+            // ===============================================================
+            if (selectedSpecialty && selectedFolder) {
+              const allFolderVideos = Array.isArray(selectedFolder.videos) ? selectedFolder.videos : [];
+              const siblingFolders = Array.isArray(selectedSpecialty.folders) ? selectedSpecialty.folders : [];
+              const folderPdfs = [
+                ...(selectedFolder.pdfs || []).map(p => ({ ...p, groupLabel: 'Material desta pasta' })),
+                ...(selectedSpecialty.directPdfs || []).map(p => ({ ...p, groupLabel: `Material de ${selectedSpecialty.name}` }))
+              ];
+
+              const subThemes = Array.from(new Set(allFolderVideos.map(v => String(v.theme || '').trim()).filter(Boolean)));
+              const fStats = computeFolderStats(selectedFolder);
+              const firstActiveId = (allFolderVideos.find(v => getVideoStatus(v.id) === 'watching') || allFolderVideos.find(v => getVideoStatus(v.id) === 'not_started'))?.id || null;
+
+              const filteredVideos = allFolderVideos.filter(v => {
+                const st = getVideoStatus(v.id);
+                if (statusFilter !== 'all' && st !== statusFilter) return false;
+                if (themeFilter !== 'all' && String(v.theme || '').trim() !== themeFilter) return false;
+                if (lessonSearch.trim()) {
+                  const q = lessonSearch.trim().toLowerCase();
+                  if (!String(v.title || '').toLowerCase().includes(q) && !String(v.theme || '').toLowerCase().includes(q)) return false;
+                }
+                return true;
+              });
+
+              const maxSegments = 28;
+              const segTotal = fStats.total > 0 ? Math.min(fStats.total, maxSegments) : 1;
+              const segCompleted = fStats.total > 0 ? Math.round((fStats.completed / fStats.total) * segTotal) : 0;
+              const segWatching = fStats.total > 0 ? Math.min(segTotal - segCompleted, Math.round((fStats.watching / fStats.total) * segTotal) || (fStats.watching > 0 && segCompleted < segTotal ? 1 : 0)) : 0;
+
+              return (
+                <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6 pb-24 animate-fade-in">
+                  {renderModals()}
+
+                  {/* Barra Superior com < Voltar e Dropdown de Temas da Especialidade Atual */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={navigateBackFromLevel3}
+                        aria-label="Voltar"
+                        title={siblingFolders.length > 1 ? `Voltar para temas de ${selectedSpecialty.name}` : 'Voltar para Especialidades'}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? 'bg-[#1E1E1E] hover:bg-[#2A2A2A] text-gray-200 border border-[#2F2F2F]' : 'bg-white hover:bg-gray-100 text-gray-800 border border-gray-200 shadow-sm'}`}
+                      >
+                        <Icons.ChevronLeft />
+                      </button>
+
+                      <div className="relative min-w-0 flex-1" ref={dropdownWrapRef}>
+                        <button
+                          type="button"
+                          onClick={() => setFolderDropdownOpen(v => !v)}
+                          className={`max-w-full flex items-center gap-2 sm:gap-2.5 px-3 sm:px-3.5 py-2 rounded-2xl text-left transition-all min-w-0 ${
+                            folderDropdownOpen
+                              ? (isDark ? 'bg-[#26262b] border border-purple-500/60 shadow-lg' : 'bg-white border border-purple-400 shadow-md')
+                              : (isDark ? 'hover:bg-[#1E1E1E] border border-transparent hover:border-[#2F2F2F]' : 'hover:bg-white border border-transparent hover:border-gray-200')
+                          }`}
+                        >
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border shrink-0 ${getAulasBadgeClass(selectedSpecialty.shortTag)}`}>
+                            {selectedSpecialty.shortTag}
+                          </span>
+                          <span className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{selectedFolder.name}</span>
+                          {siblingFolders.length > 1 && (
+                            <span className={`shrink-0 transition-transform ${folderDropdownOpen ? 'rotate-180 text-purple-400' : 'text-gray-400'}`}>
+                              <Icons.ChevronDown />
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Dropdown estilo imagem de referência para trocar para outro tema da mesma especialidade */}
+                        {folderDropdownOpen && siblingFolders.length > 1 && (
+                          <div className={`absolute left-0 top-full mt-2 w-[min(20rem,calc(100vw-4.25rem))] sm:w-80 rounded-2xl border shadow-2xl z-50 backdrop-blur-xl overflow-hidden ${
+                            isDark ? 'bg-[#19191e]/95 border-white/15 text-white' : 'bg-white/95 border-gray-200 text-gray-900'
+                          }`}>
+                            <div className={`px-4 py-2.5 text-[11px] font-black uppercase tracking-wider border-b flex items-center justify-between gap-2 ${isDark ? 'border-white/10 text-gray-400' : 'border-gray-100 text-gray-500'}`}>
+                              <span className="truncate">Temas de {selectedSpecialty.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => { setFolderDropdownOpen(false); setSelectedFolderId(''); setSelectedSpecialtyId(''); }}
+                                className="text-purple-400 hover:text-purple-300 font-bold normal-case shrink-0"
+                              >
+                                Trocar especialidade
+                              </button>
+                            </div>
+                            <div className="max-h-[55vh] overflow-y-auto p-1.5 space-y-1">
+                              {siblingFolders.map(sib => {
+                                const st = computeFolderStats(sib);
+                                const active = sib.id === selectedFolder.id;
+                                return (
+                                  <button
+                                    key={sib.id}
+                                    type="button"
+                                    onClick={() => openFolder(selectedSpecialty, sib)}
+                                    className={`w-full px-3.5 py-2.5 rounded-xl text-left flex items-center justify-between gap-2 transition-colors ${
+                                      active
+                                        ? (isDark ? 'bg-white/15 text-white font-bold' : 'bg-purple-50 text-purple-800 font-bold')
+                                        : (isDark ? 'text-gray-200 hover:bg-white/10' : 'text-gray-700 hover:bg-gray-100')
+                                    }`}
+                                  >
+                                    <span className="text-sm truncate">{sib.name}</span>
+                                    <span className="text-[11px] shrink-0 flex items-center gap-1.5">
+                                      {st.completed > 0 && <span className="text-emerald-400 font-bold">✓{st.completed}</span>}
+                                      {st.watching > 0 && <span className="text-amber-400 font-bold">●{st.watching}</span>}
+                                      <span className="text-gray-400">{st.total}</span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-auto flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedFolderId(''); setSelectedSpecialtyId(''); }}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors ${isDark ? 'bg-[#1E1E1E] border border-[#2F2F2F] text-gray-300 hover:bg-[#2A2A2A]' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                      >
+                        Especialidades
+                      </button>
+                      <button
+                        type="button"
+                        disabled={allFolderVideos.length === 0}
+                        onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder)}
+                        className="flex-1 sm:flex-none justify-center px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-md transition-colors"
+                      >
+                        <Icons.Play /> Assistir playlist ({allFolderVideos.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Linha de Busca + Filtro + Barra Segmentada de Progresso */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 min-w-0">
+                      <div className="relative w-full sm:w-64 min-w-0">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Icons.Search /></span>
+                        <input
+                          type="text"
+                          value={lessonSearch}
+                          onChange={e => setLessonSearch(e.target.value)}
+                          placeholder="Buscar aula específica..."
+                          className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl text-sm border outline-none focus:border-purple-500 ${isDark ? 'bg-[#1B1B1E] border-[#2E2E34] text-white placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 shadow-sm'}`}
+                        />
+                      </div>
+
+                      {/* Pills de Status (Todos / Não iniciados / Assistindo Amarelo / Concluídos Verde) */}
+                      <div className={`w-full sm:w-auto flex items-center overflow-x-auto no-scrollbar p-1 rounded-xl border ${isDark ? 'bg-[#1B1B1E] border-[#2E2E34]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        {[
+                          { id: 'all', label: 'Todos' },
+                          { id: 'not_started', label: 'Não iniciados' },
+                          { id: 'watching', label: `Assistindo (${fStats.watching})`, dot: 'bg-amber-400' },
+                          { id: 'completed', label: `Concluídos (${fStats.completed})`, dot: 'bg-emerald-500' }
+                        ].map(opt => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setStatusFilter(opt.id)}
+                            className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors ${
+                              statusFilter === opt.id
+                                ? 'bg-purple-600 text-white'
+                                : (isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')
+                            }`}
+                          >
+                            {opt.dot && <span className={`w-2 h-2 rounded-full ${opt.dot}`} />}
+                            <span>{opt.label}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Alternar Trilha Horizontal <-> Lista */}
+                      <div className={`inline-flex p-1 rounded-xl border ${isDark ? 'bg-[#1B1B1E] border-[#2E2E34]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setDisplayMode('trilha')}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${displayMode === 'trilha' ? 'bg-purple-600 text-white' : 'text-gray-400'}`}
+                        >
+                          <Icons.Grid /> Trilha
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDisplayMode('lista')}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${displayMode === 'lista' ? 'bg-purple-600 text-white' : 'text-gray-400'}`}
+                        >
+                          <Icons.List /> Lista
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Indicador Segmentado igual ao print: X de Y aulas concluídas */}
+                    <div className="flex flex-col lg:items-end gap-1.5 w-full lg:w-64 min-w-0">
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="font-bold text-gray-900 dark:text-white">
+                          <strong>{fStats.completed}</strong> de {fStats.total} aulas concluídas
+                        </span>
+                        {fStats.watching > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-400 font-bold">
+                            ● {fStats.watching} assistindo
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full flex items-center gap-1">
+                        {Array.from({ length: segTotal }).map((_, i) => {
+                          const color = i < segCompleted
+                            ? 'bg-emerald-500'
+                            : i < (segCompleted + segWatching)
+                              ? 'bg-amber-400'
+                              : (isDark ? 'bg-[#2E2E34]' : 'bg-gray-200');
+                          return <span key={i} className={`h-1.5 flex-1 rounded-full ${color}`} />;
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filtro opcional de subtemas se a pasta possuir subpastas */}
+                  {subThemes.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 mb-5">
+                      <button
+                        type="button"
+                        onClick={() => setThemeFilter('all')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${renderFolderBadgeClass(themeFilter === 'all')}`}
+                      >
+                        Todos os subtemas
+                      </button>
+                      {subThemes.map(t => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setThemeFilter(t)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${renderFolderBadgeClass(themeFilter === t)}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Conteúdo Principal: Trilha Horizontal com Timeline OU Lista Vertical */}
+                  {filteredVideos.length === 0 ? (
+                    <div className={`rounded-3xl p-10 text-center border ${isDark ? 'bg-[#19191d] border-[#2A2A2E] text-gray-400' : 'bg-white border-gray-200 text-gray-600'}`}>
+                      Nenhuma aula encontrada com os filtros atuais.
+                    </div>
+                  ) : displayMode === 'trilha' ? (
+                    <div className={`rounded-3xl p-3 sm:p-6 border ${isDark ? 'bg-[#161619] border-[#26262b]' : 'bg-white/90 border-gray-200 shadow-sm'}`}>
+                      <div
+                        ref={trilhaRailRef}
+                        className="flex items-stretch overflow-x-auto pb-3 scroll-smooth snap-x snap-mandatory"
+                        style={{ scrollbarWidth: 'thin' }}
+                      >
+                        {filteredVideos.map((vid, idx) => {
+                          const st = getVideoStatus(vid.id);
+                          const isCompleted = st === 'completed';
+                          const isWatching = st === 'watching';
+                          const isNextUp = !isCompleted && !isWatching && String(vid.id) === String(firstActiveId);
+                          const realOrder = allFolderVideos.findIndex(v => String(v.id) === String(vid.id)) + 1;
+
+                          return (
+                            <div key={`${vid.id}_${idx}`} className="w-[216px] sm:w-[244px] md:w-[252px] shrink-0 snap-start flex flex-col">
+                              <div className="px-2 flex-1 flex flex-col">
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id); } }}
+                                  title={vid.title}
+                                  className={`flex-1 rounded-2xl p-4 border flex flex-col justify-between min-h-[168px] cursor-pointer transition-all hover:-translate-y-0.5 ${
+                                    isCompleted
+                                      ? (isDark ? 'bg-gradient-to-b from-emerald-950/35 to-[#1B1B1F] border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.12)]' : 'bg-emerald-50/70 border-emerald-400 shadow-sm')
+                                      : isWatching
+                                        ? (isDark ? 'bg-gradient-to-b from-amber-950/35 to-[#1B1B1F] border-amber-400/70 shadow-[0_0_20px_rgba(251,191,36,0.16)]' : 'bg-amber-50/80 border-amber-400 shadow-sm')
+                                        : isNextUp
+                                          ? (isDark ? 'bg-gradient-to-br from-emerald-950/25 via-[#1C1C21] to-[#19191D] border-white/60 shadow-lg' : 'bg-purple-50/50 border-purple-500 shadow-md')
+                                          : (isDark ? 'bg-[#1B1B1F] border-[#2C2C33] hover:border-purple-500/40' : 'bg-white border-gray-200 hover:border-purple-400 shadow-sm')
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="flex items-center justify-between gap-2 mb-3">
+                                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${getAulasBadgeClass(selectedSpecialty.shortTag)}`}>
+                                        {selectedSpecialty.shortTag}
+                                      </span>
+                                      <span className="text-[11px] font-bold text-gray-400">#{String(realOrder).padStart(2, '0')}</span>
+                                    </div>
+                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-snug line-clamp-3">
+                                      {vid.title}
+                                    </h4>
+                                    {vid.theme && (
+                                      <div className="mt-1.5 text-[11px] text-purple-400 truncate">{vid.theme}</div>
+                                    )}
+                                  </div>
+
+                                  <div className="mt-4 pt-2 flex items-center justify-between gap-2">
+                                    {isCompleted ? (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">
+                                        ✓ Concluído
+                                      </span>
+                                    ) : isWatching ? (
+                                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-400/20 text-amber-400 border border-amber-400/40">
+                                        ● Assistindo
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Não iniciado</span>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateVideoWatchState(vid, isCompleted ? 'watching' : 'completed', {
+                                          force: true,
+                                          specialtyId: selectedSpecialty.id,
+                                          specialtyName: selectedSpecialty.name,
+                                          folderId: selectedFolder.id,
+                                          folderName: selectedFolder.name
+                                        });
+                                      }}
+                                      title={isCompleted ? 'Mudar para Assistindo (Amarelo)' : 'Marcar como Concluído (Verde)'}
+                                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border transition-colors ${
+                                        isCompleted
+                                          ? 'bg-emerald-500 text-white border-emerald-500'
+                                          : (isDark ? 'bg-white/5 hover:bg-emerald-500/25 border-white/10 text-gray-400 hover:text-emerald-300' : 'bg-gray-100 hover:bg-emerald-100 border-gray-200 text-gray-500 hover:text-emerald-700')
+                                      }`}
+                                    >
+                                      ✓
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Linha do Tempo conectada embaixo de cada card (Verde = Concluído, Amarelo = Assistindo, ▶ = Próxima) */}
+                              <div className="mt-4 relative flex items-center justify-center h-9">
+                                <div className={`absolute top-1/2 -translate-y-1/2 h-[2px] ${
+                                  filteredVideos.length === 1
+                                    ? 'hidden'
+                                    : idx === 0
+                                      ? 'left-1/2 right-0'
+                                      : idx === filteredVideos.length - 1
+                                        ? 'left-0 right-1/2'
+                                        : 'left-0 right-0'
+                                } ${isDark ? 'bg-[#2E2E35]' : 'bg-gray-200'}`} />
+
+                                <button
+                                  type="button"
+                                  onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id)}
+                                  title={`Assistir: ${vid.title}`}
+                                  className={`relative z-10 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${
+                                    isCompleted
+                                      ? 'w-7 h-7 bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.5)]'
+                                      : isWatching
+                                        ? 'w-7 h-7 bg-amber-400 text-amber-950 shadow-[0_0_12px_rgba(251,191,36,0.55)]'
+                                        : isNextUp
+                                          ? (isDark ? 'w-8 h-8 bg-white text-black shadow-lg' : 'w-8 h-8 bg-purple-600 text-white shadow-md')
+                                          : (isDark ? 'w-5 h-5 bg-[#1B1B1F] border-2 border-[#3C3C45] text-gray-500' : 'w-5 h-5 bg-white border-2 border-gray-300 text-gray-400')
+                                  }`}
+                                >
+                                  {isCompleted ? (
+                                    <span className="text-xs font-black">✓</span>
+                                  ) : (isWatching || isNextUp) ? (
+                                    <span className="text-[10px] font-black pl-0.5">▶</span>
+                                  ) : (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Setas < > no canto inferior direito igual ao print */}
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Concluído</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Assistindo</span>
+                          <span className="inline-flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-full ${isDark ? 'bg-[#3C3C45]' : 'bg-gray-300'}`} /> Não iniciado</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => trilhaRailRef.current?.scrollBy({ left: -520, behavior: 'smooth' })}
+                            aria-label="Rolar trilha para esquerda"
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-colors ${isDark ? 'bg-[#222227] hover:bg-[#2d2d34] border-[#32323a] text-gray-200' : 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-800'}`}
+                          >
+                            <Icons.ChevronLeft />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => trilhaRailRef.current?.scrollBy({ left: 520, behavior: 'smooth' })}
+                            aria-label="Rolar trilha para direita"
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition-colors ${isDark ? 'bg-[#222227] hover:bg-[#2d2d34] border-[#32323a] text-gray-200' : 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-800'}`}
+                          >
+                            <Icons.ChevronRight />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Modo Lista Completa */
+                    <div className={`rounded-3xl border overflow-hidden ${isDark ? 'bg-[#18181c] border-[#2A2A30]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                      <div className="divide-y divide-gray-200 dark:divide-[#26262c]">
+                        {filteredVideos.map((vid, idx) => {
+                          const st = getVideoStatus(vid.id);
+                          const isCompleted = st === 'completed';
+                          const isWatching = st === 'watching';
+                          const realOrder = allFolderVideos.findIndex(v => String(v.id) === String(vid.id)) + 1;
+                          return (
+                            <div
+                              key={`${vid.id}_${idx}`}
+                              onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id)}
+                              className={`px-3 sm:px-5 py-3.5 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-purple-50/40'}`}
+                            >
+                              <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                                <span className={`w-8 h-8 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
+                                  isCompleted
+                                    ? 'bg-emerald-500 text-white'
+                                    : isWatching
+                                      ? 'bg-amber-400 text-amber-950'
+                                      : (isDark ? 'bg-[#26262c] text-gray-300' : 'bg-gray-100 text-gray-700')
+                                }`}>
+                                  {isCompleted ? '✓' : isWatching ? '▶' : String(realOrder).padStart(2, '0')}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white line-clamp-2 sm:truncate">{vid.title}</div>
+                                  {vid.theme && <div className="text-[11px] sm:text-xs text-purple-400 truncate mt-0.5">{vid.theme}</div>}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`hidden sm:inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                                  isCompleted
+                                    ? 'bg-emerald-500/15 text-emerald-400'
+                                    : isWatching
+                                      ? 'bg-amber-400/20 text-amber-400'
+                                      : 'text-gray-400'
+                                }`}>
+                                  {isCompleted ? 'Concluído' : isWatching ? 'Assistindo' : 'Não iniciado'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateVideoWatchState(vid, isCompleted ? 'watching' : 'completed', {
+                                      force: true,
+                                      specialtyId: selectedSpecialty.id,
+                                      specialtyName: selectedSpecialty.name,
+                                      folderId: selectedFolder.id,
+                                      folderName: selectedFolder.name
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border ${
+                                    isCompleted
+                                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                                      : (isDark ? 'bg-[#26262c] border-[#35353d] text-gray-300 hover:border-emerald-400' : 'bg-gray-100 border-gray-200 text-gray-700')
+                                  }`}
+                                >
+                                  <span className="hidden sm:inline">{isCompleted ? '✓ Concluído' : '✓ Concluir'}</span>
+                                  <span className="sm:hidden">✓</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Seção Material de Apoio (PDFs desta pasta) */}
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <div className="flex items-center gap-2.5">
+                        <span className="p-2 rounded-xl bg-rose-500/15 text-rose-400"><Icons.FileText /></span>
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Material de apoio (PDFs desta pasta)</h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Clique em qualquer PDF para abrir o leitor direto no site.</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-gray-400">{folderPdfs.length} arquivo(s)</span>
+                    </div>
+
+                    {folderPdfs.length === 0 ? (
+                      <div className={`rounded-2xl p-5 border text-sm ${isDark ? 'bg-[#18181c] border-[#26262c] text-gray-400' : 'bg-white border-gray-200 text-gray-600'}`}>
+                        Esta pasta não possui PDFs na subpasta <code className="px-1 py-0.5 rounded bg-purple-500/10 text-purple-400">pdf</code>. Caso adicione PDFs lá no Drive, clique em Sincronizar.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {folderPdfs.map((pdf, i) => {
+                          const opened = Boolean(pdfMap[String(pdf.id)]);
+                          return (
+                            <div
+                              key={`${pdf.id}_${i}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => openPdfPreview(pdf, `${selectedSpecialty.name} · ${selectedFolder.name}`)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPdfPreview(pdf, `${selectedSpecialty.name} · ${selectedFolder.name}`); } }}
+                              className={`rounded-2xl p-4 border flex items-center justify-between gap-3 cursor-pointer transition-all hover:scale-[1.01] ${
+                                isDark ? 'bg-[#19191e] border-[#2B2B32] hover:border-rose-400/50' : 'bg-white border-gray-200 hover:border-rose-400 shadow-sm'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="w-10 h-10 rounded-xl bg-rose-500/15 text-rose-400 font-black text-xs flex items-center justify-center shrink-0">PDF</span>
+                                <div className="min-w-0">
+                                  <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{pdf.title}</div>
+                                  <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
+                                    <span>{pdf.groupLabel}</span>
+                                    {opened && <span className="text-emerald-400 font-bold">· Lido</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <a
+                                href={`https://drive.google.com/file/d/${pdf.id}/view`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Abrir PDF em nova aba"
+                                className={`p-2 rounded-lg shrink-0 ${isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+                              >
+                                <Icons.ExternalLink />
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            // ===============================================================
+            // NÍVEL 2: PASTAS / TEMAS DA ESPECIALIDADE SELECIONADA
+            // ===============================================================
+            if (selectedSpecialty) {
+              const spStats = computeSpecialtyStats(selectedSpecialty);
+              const q = folderSearch.trim().toLowerCase();
+              const filteredFolders = (selectedSpecialty.folders || []).filter(f => !q || f.name.toLowerCase().includes(q));
+
+              return (
+                <div className="max-w-6xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6 pb-24 animate-fade-in">
+                  {renderModals()}
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedSpecialtyId(''); setSelectedFolderId(''); }}
+                        className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 rounded-xl bg-gray-200 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300 shrink-0 hover:bg-gray-300 dark:hover:bg-[#333] transition-colors"
+                      >
+                        <Icons.ChevronLeft /> <span className="font-bold text-sm">Especialidades</span>
+                      </button>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border shrink-0 ${getAulasBadgeClass(selectedSpecialty.shortTag)}`}>{selectedSpecialty.shortTag}</span>
+                          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">{selectedSpecialty.name}</h2>
+                        </div>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                          {spStats.foldersCount} temas · {spStats.total} aulas ({spStats.completed} concluídas, {spStats.watching} assistindo) · {spStats.pdfCount} PDFs
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={spStats.total === 0}
+                      onClick={() => startSpecialtyPlaylist(selectedSpecialty)}
+                      className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-md transition-colors shrink-0"
+                    >
+                      <Icons.Play /> Assistir playlist completa ({spStats.total})
+                    </button>
+                  </div>
+
+                  <div className="relative mb-6 max-w-md">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Icons.Search /></span>
+                    <input
+                      type="text"
+                      value={folderSearch}
+                      onChange={e => setFolderSearch(e.target.value)}
+                      placeholder={`Buscar pasta/tema em ${selectedSpecialty.name}...`}
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border outline-none focus:border-purple-500 ${isDark ? 'bg-[#1A1A1E] border-[#2E2E35] text-white placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 shadow-sm'}`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredFolders.map(folder => {
+                      const st = computeFolderStats(folder);
+                      const pctDone = st.total ? (st.completed / st.total) * 100 : 0;
+                      const pctWatch = st.total ? (st.watching / st.total) * 100 : 0;
+                      return (
+                        <div
+                          key={folder.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openFolder(selectedSpecialty, folder)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFolder(selectedSpecialty, folder); } }}
+                          className={`rounded-[22px] p-5 border flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.015] ${
+                            isDark ? 'bg-[#1B1B1F] border-[#2C2C33] hover:border-purple-500/50' : 'bg-white border-gray-200 hover:border-purple-400 shadow-sm'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${getAulasBadgeClass(selectedSpecialty.shortTag)}`}>
+                                {selectedSpecialty.shortTag}
+                              </span>
+                              <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                                {st.completed > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">✓ {st.completed}</span>}
+                                {st.watching > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-400">● {st.watching}</span>}
+                              </div>
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-snug">{folder.name}</h3>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 flex items-center gap-3">
+                              <span>{st.total} aula{st.total === 1 ? '' : 's'}</span>
+                              <span>·</span>
+                              <span>{st.pdfCount} PDF{st.pdfCount === 1 ? '' : 's'}</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-5">
+                            <div className={`h-2 rounded-full overflow-hidden flex ${isDark ? 'bg-[#2A2A32]' : 'bg-gray-200'}`}>
+                              {pctDone > 0 && <div className="h-full bg-emerald-500" style={{ width: `${pctDone}%` }} />}
+                              {pctWatch > 0 && <div className="h-full bg-amber-400" style={{ width: `${pctWatch}%` }} />}
+                            </div>
+                            <div className="mt-3 flex items-center justify-between text-xs font-bold">
+                              <span className="text-gray-500 dark:text-gray-400">{st.completed}/{st.total} concluídas</span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); startFolderPlaylistFromVideo(selectedSpecialty, folder); }}
+                                className="text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                              >
+                                ▶ Playlist
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {Array.isArray(selectedSpecialty.directPdfs) && selectedSpecialty.directPdfs.length > 0 && (
+                    <div className="mt-8">
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                        <Icons.FileText /> Materiais gerais de {selectedSpecialty.name} ({selectedSpecialty.directPdfs.length} PDFs)
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {selectedSpecialty.directPdfs.map((pdf, i) => (
+                          <button
+                            key={`${pdf.id}_${i}`}
+                            type="button"
+                            onClick={() => openPdfPreview(pdf, selectedSpecialty.name)}
+                            className={`rounded-2xl p-3.5 border text-left flex items-center gap-3 transition-colors ${isDark ? 'bg-[#19191e] border-[#2C2C33] hover:border-rose-400/50' : 'bg-white border-gray-200 shadow-sm hover:border-rose-400'}`}
+                          >
+                            <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-400 font-black text-[10px]">PDF</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{pdf.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // ===============================================================
+            // NÍVEL 1: HUB DA IMERSÃO (MENUS: PLAYLISTS / ASSISTINDO / MATERIAIS PDF)
+            // ===============================================================
+            return (
+              <div className="max-w-6xl mx-auto px-3 sm:px-6 md:px-8 py-4 sm:py-6 pb-24 animate-fade-in">
+                {renderModals()}
+
+                    {/* Cabeçalho */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentView('painel')}
+                          className="flex items-center gap-1.5 sm:gap-2 px-3 py-2 rounded-xl bg-gray-200 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300 shrink-0 hover:bg-gray-300 dark:hover:bg-[#333] transition-colors"
+                        >
+                          <Icons.ChevronLeft /> <span className="font-bold text-sm">Voltar</span>
+                        </button>
+                        <div className="min-w-0">
+                          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white leading-tight">
+                            Imersão <span className="text-purple-600">Videoaulas</span>
+                          </h2>
+                          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                            {overallStats.total} aulas em {specialties.length} especialidades · {overallStats.pdfCount} PDFs · Verde = concluído, Amarelo = assistindo.
+                          </p>
+                        </div>
+                      </div>
+
+                      {aulasSyncing && (
+                        <div className={`inline-flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-full text-xs font-bold border ${isDark ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-700'}`}>
+                          <span className="inline-block animate-spin"><Icons.Refresh /></span>
+                          <span>Verificando novas aulas…</span>
+                        </div>
+                      )}
+                    </div>
+
+                {aulasSyncMessage && (
+                  <div className={`mb-5 px-4 py-3 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-between gap-2 ${
+                    aulasSyncError
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-purple-500/10 border-purple-500/30 text-purple-300'
+                  }`}>
+                    <span>{aulasSyncMessage}</span>
+                    <button type="button" onClick={() => setAulasSyncMessage('')} className="opacity-70 hover:opacity-100"><Icons.X /></button>
+                  </div>
+                )}
+
+                {/* Menus internos da Imersão (Playlists / Assistindo / Materiais PDF) */}
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 mb-5 sm:mb-6">
+                  <div className={`w-full sm:w-auto grid grid-cols-3 sm:inline-flex gap-1 p-1 rounded-2xl border ${isDark ? 'bg-[#18181c] border-[#2B2B32]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                    {[
+                      { id: 'playlists', short: 'Playlists', label: 'Playlists por Especialidade' },
+                      { id: 'watching', short: `Assistindo${overallStats.watching > 0 ? ` (${overallStats.watching})` : ''}`, label: `Continuar Assistindo${overallStats.watching > 0 ? ` (${overallStats.watching})` : ''}` },
+                      { id: 'pdfs', short: `PDFs (${overallStats.pdfCount})`, label: `Materiais PDF (${overallStats.pdfCount})` }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setSubTab(tab.id)}
+                        className={`px-2 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-center truncate transition-all ${
+                          subTab === tab.id
+                            ? 'bg-purple-600 text-white shadow-sm'
+                            : (isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')
+                        }`}
+                      >
+                        <span className="sm:hidden">{tab.short}</span>
+                        <span className="hidden sm:inline">{tab.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {subTab === 'playlists' && specialties.length > 0 && (
+                    <div className="relative w-full sm:w-72">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Icons.Search /></span>
+                      <input
+                        type="text"
+                        value={globalSearch}
+                        onChange={e => setGlobalSearch(e.target.value)}
+                        placeholder="Buscar tema ou aula..."
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border outline-none focus:border-purple-500 ${isDark ? 'bg-[#1A1A1E] border-[#2E2E35] text-white placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 shadow-sm'}`}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Loading / Estado vazio antes do usuário subir as pastas no Drive */}
+                {aulasLoading && specialties.length === 0 ? (
+                  <div className={`rounded-3xl p-12 text-center border ${isDark ? 'bg-[#18181c] border-[#2A2A30] text-gray-300' : 'bg-white border-gray-200 text-gray-700'}`}>
+                    <div className="text-sm font-bold animate-pulse">Carregando catálogo da Imersão…</div>
+                  </div>
+                ) : subTab === 'playlists' && specialties.length === 0 ? (
+                  <div className={`rounded-3xl p-6 sm:p-8 border ${isDark ? 'bg-[#18181d] border-[#2C2C34] text-gray-200' : 'bg-white border-gray-200 text-gray-800 shadow-sm'}`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-200 dark:border-white/10">
+                      <div>
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/15 text-purple-400 text-xs font-black uppercase mb-2">
+                          <Icons.Video /> Pronto para receber suas aulas do Drive
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhuma aula indexada ainda</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Você já pode deixar o <code className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">Code.gs</code> publicado agora e enviar os vídeos depois!</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setShowSettings(true)} className={`px-4 py-2.5 rounded-xl border text-sm font-bold ${isDark ? 'border-[#34343c] bg-[#222228]' : 'border-gray-200 bg-gray-100'}`}>
+                          ⚙ Abrir Configurar Plano
+                        </button>
+                        <button type="button" onClick={() => loadAulasCatalog({ manual: true, forceRefresh: true })} className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-black">
+                          ↻ Sincronizar Drive agora
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-sm">
+                      <div className={`p-4 rounded-2xl border ${isDark ? 'bg-black/25 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="font-black text-purple-400 mb-1">1. Crie a pasta com o Code.gs</div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">No editor do Apps Script, execute <code className="text-purple-400">setupAulasDrive()</code> ou <code className="text-purple-400">setupTudo()</code> para criar a pasta <strong>HZ MED - Aulas</strong> no seu Google Drive.</p>
+                      </div>
+                      <div className={`p-4 rounded-2xl border ${isDark ? 'bg-black/25 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="font-black text-purple-400 mb-1">2. Suba as pastas do PC</div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Arraste suas pastas já renomeadas (<code className="text-purple-400">F:\sanar</code> inteira ou <code className="text-purple-400">cirurgia</code>, <code className="text-purple-400">pediatria</code>, <code className="text-purple-400">pdf</code>...) para dentro dela.</p>
+                      </div>
+                      <div className={`p-4 rounded-2xl border ${isDark ? 'bg-black/25 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="font-black text-purple-400 mb-1">3. Clique em Sincronizar</div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Sempre que colocar novas aulas no Drive no futuro, clique em <strong>Sincronizar Drive</strong> aqui em cima e elas aparecem na hora.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : subTab === 'playlists' ? (
+                  <>
+                    {/* Resultados da busca global dentro da Imersão */}
+                    {globalSearchMatches && (
+                      <div className={`mb-6 rounded-3xl p-5 border ${isDark ? 'bg-[#19191e] border-purple-500/35' : 'bg-white border-purple-300 shadow-sm'}`}>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <h3 className="text-sm font-black uppercase tracking-wider text-purple-400">
+                            Resultados para "{globalSearch}" ({globalSearchMatches.folders.length} pastas · {globalSearchMatches.totalLessons} aulas)
+                          </h3>
+                          <button type="button" onClick={() => setGlobalSearch('')} className="text-xs text-gray-400 hover:text-white">Limpar busca</button>
+                        </div>
+                        {globalSearchMatches.folders.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {globalSearchMatches.folders.map(({ sp, folder, stats }) => (
+                              <button
+                                key={folder.id}
+                                type="button"
+                                onClick={() => openFolder(sp, folder)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-2 ${isDark ? 'bg-white/5 border-white/10 hover:border-purple-400 text-white' : 'bg-gray-50 border-gray-200 hover:border-purple-400 text-gray-800'}`}
+                              >
+                                <span className="text-purple-400">{sp.shortTag}</span>
+                                <span>{folder.name}</span>
+                                <span className="text-gray-400">({stats.total})</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {globalSearchMatches.lessons.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                            {globalSearchMatches.lessons.map(({ sp, folder, video }, i) => {
+                              const st = getVideoStatus(video.id);
+                              return (
+                                <button
+                                  key={`${video.id}_${i}`}
+                                  type="button"
+                                  onClick={() => startFolderPlaylistFromVideo(sp, folder, video.id)}
+                                  className={`p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 ${isDark ? 'bg-black/25 border-white/10 hover:border-purple-400' : 'bg-gray-50 border-gray-200 hover:border-purple-400'}`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-bold text-gray-900 dark:text-white truncate">{video.title}</div>
+                                    <div className="text-[11px] text-gray-400 truncate">{sp.name} · {folder.name}</div>
+                                  </div>
+                                  <span className={`text-[10px] font-bold shrink-0 ${st === 'completed' ? 'text-emerald-400' : st === 'watching' ? 'text-amber-400' : 'text-purple-400'}`}>
+                                    {st === 'completed' ? '✓ Concluído' : st === 'watching' ? '● Assistindo' : '▶ Assistir'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Banner Continuar de onde parou */}
+                    {aulasProgress?.lastOpened?.videoId && (() => {
+                      const last = aulasProgress.lastOpened;
+                      const sp = specialties.find(s => s.id === last.specialtyId);
+                      const folder = sp?.folders?.find(f => f.id === last.folderId);
+                      if (!sp || !folder) return null;
+                      const lastSt = getVideoStatus(last.videoId);
+                      return (
+                        <div className={`mb-6 rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isDark ? 'bg-gradient-to-r from-[#21192e] to-[#1a1a20] border-purple-500/35' : 'bg-gradient-to-r from-purple-50 to-white border-purple-200 shadow-sm'}`}>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-black ${lastSt === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-400/20 text-amber-400'}`}>
+                              {lastSt === 'completed' ? '✓' : '▶'}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-black uppercase tracking-wider text-purple-400">Última aula aberta · {sp.name} · {folder.name}</div>
+                              <div className="text-sm font-bold text-gray-900 dark:text-white truncate">{last.title}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button type="button" onClick={() => openFolder(sp, folder)} className={`px-3 py-2 rounded-xl text-xs font-bold border ${isDark ? 'border-white/15 bg-white/5 text-gray-200' : 'border-gray-200 bg-white text-gray-700'}`}>
+                              Abrir trilha
+                            </button>
+                            <button type="button" onClick={() => startFolderPlaylistFromVideo(sp, folder, last.videoId)} className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-black">
+                              ▶ Retomar aula
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Grid de Especialidades */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                      {specialties.map(sp => {
+                        const st = computeSpecialtyStats(sp);
+                        const pctDone = st.total ? (st.completed / st.total) * 100 : 0;
+                        const pctWatch = st.total ? (st.watching / st.total) * 100 : 0;
+                        return (
+                          <div
+                            key={sp.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => openSpecialty(sp)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSpecialty(sp); } }}
+                            className={`rounded-[24px] p-5 border flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.015] ${
+                              isDark ? 'bg-[#1A1A1E] border-[#2C2C33] hover:border-purple-500/50 shadow-lg' : 'bg-white border-gray-200 hover:border-purple-400 shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-2 mb-3">
+                                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase border ${getAulasBadgeClass(sp.shortTag)}`}>
+                                  {sp.shortTag}
+                                </span>
+                                <div className="flex items-center gap-1.5 text-xs font-bold">
+                                  {st.completed > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">✓ {st.completed}</span>}
+                                  {st.watching > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-400">● {st.watching}</span>}
+                                </div>
+                              </div>
+                              <h3 className="text-xl font-bold text-gray-900 dark:text-white">{sp.name}</h3>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                                {st.foldersCount} {st.foldersCount === 1 ? 'pasta' : 'temas/pastas'} · {st.total} aulas · {st.pdfCount} PDFs
+                              </p>
+                            </div>
+
+                            <div className="mt-5">
+                              <div className={`h-2.5 rounded-full overflow-hidden flex ${isDark ? 'bg-[#2A2A32]' : 'bg-gray-200'}`}>
+                                {pctDone > 0 && <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pctDone}%` }} />}
+                                {pctWatch > 0 && <div className="h-full bg-amber-400 transition-all" style={{ width: `${pctWatch}%` }} />}
+                              </div>
+                              <div className="mt-3 flex items-center justify-between text-xs font-bold">
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {st.completed}/{st.total} concluídas ({st.total ? Math.round(pctDone) : 0}%)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); startSpecialtyPlaylist(sp); }}
+                                  className="px-2.5 py-1 rounded-lg bg-purple-600/15 text-purple-400 hover:bg-purple-600 hover:text-white transition-colors"
+                                >
+                                  ▶ Playlist
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : subTab === 'watching' ? (
+                  /* Aba Continuar Assistindo (todas as aulas marcadas em Amarelo) */
+                  <div>
+                    {watchingList.length === 0 ? (
+                      <div className={`rounded-3xl p-10 text-center border ${isDark ? 'bg-[#18181c] border-[#2A2A30] text-gray-400' : 'bg-white border-gray-200 text-gray-600'}`}>
+                        Nenhuma aula em andamento no momento. Sempre que você abrir um vídeo e não marcar como concluído, ele fica em amarelo aqui para continuar depois.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {watchingList.map(({ video, specialty, folder }) => (
+                          <div
+                            key={video.id}
+                            className={`rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                              isDark ? 'bg-[#1B1B1F] border-amber-400/50' : 'bg-amber-50/60 border-amber-300 shadow-sm'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${getAulasBadgeClass(specialty.shortTag)}`}>{specialty.shortTag}</span>
+                                <span className="text-xs text-amber-400 font-bold truncate">{folder.name}</span>
+                              </div>
+                              <div className="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 sm:truncate">{video.title}</div>
+                            </div>
+                            <div className="flex items-center justify-end gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => updateVideoWatchState(video, 'completed', {
+                                  force: true,
+                                  specialtyId: specialty.id,
+                                  specialtyName: specialty.name,
+                                  folderId: folder.id,
+                                  folderName: folder.name
+                                })}
+                                title="Marcar como concluída"
+                                className="px-2.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white text-xs font-bold transition-colors"
+                              >
+                                ✓ Concluir
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => startFolderPlaylistFromVideo(specialty, folder, video.id)}
+                                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 text-xs font-black"
+                              >
+                                ▶ Retomar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Aba Materiais (PDFs) */
+                  <div>
+                    <div className="relative mb-5 max-w-md">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Icons.Search /></span>
+                      <input
+                        type="text"
+                        value={pdfSearch}
+                        onChange={e => setPdfSearch(e.target.value)}
+                        placeholder="Buscar apostila ou resumo em PDF..."
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border outline-none focus:border-purple-500 ${isDark ? 'bg-[#1A1A1E] border-[#2E2E35] text-white placeholder-gray-500' : 'bg-white border-gray-200 text-gray-900 shadow-sm'}`}
+                      />
+                    </div>
+                    {allPdfsGrouped.length === 0 ? (
+                      <div className={`rounded-3xl p-10 text-center border ${isDark ? 'bg-[#18181c] border-[#2A2A30] text-gray-400' : 'bg-white border-gray-200 text-gray-600'}`}>
+                        Nenhum PDF encontrado.
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        {allPdfsGrouped.map(group => (
+                          <div key={group.id} className={`rounded-3xl p-5 border ${isDark ? 'bg-[#18181c] border-[#28282f]' : 'bg-white border-gray-200 shadow-sm'}`}>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                              <div className="flex items-center gap-2.5">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${getAulasBadgeClass(group.tag)}`}>{group.tag}</span>
+                                <h3 className="text-base font-bold text-gray-900 dark:text-white">{group.title}</h3>
+                              </div>
+                              {group.sp && group.folder && (
+                                <button type="button" onClick={() => openFolder(group.sp, group.folder)} className="text-xs font-bold text-purple-400 hover:text-purple-300">
+                                  Abrir aulas desta pasta →
+                                </button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {group.items.map((pdf, i) => (
+                                <button
+                                  key={`${pdf.id}_${i}`}
+                                  type="button"
+                                  onClick={() => openPdfPreview(pdf, group.title)}
+                                  className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition-colors ${isDark ? 'bg-black/20 border-white/10 hover:border-rose-400/50' : 'bg-gray-50 border-gray-200 hover:border-rose-400'}`}
+                                >
+                                  <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-400 font-black text-[10px] shrink-0">PDF</span>
+                                  <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white truncate">{pdf.title}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
           };
 
           const DesafioView = () => {
@@ -6745,7 +9719,7 @@
                 <StableMetricCard label="Feitas" value={stats.feitas} sub="questões únicas" accent="green" />
                 <StableMetricCard label="Faltam" value={stats.questionsLeft} sub="para completar o banco" accent="red" />
                 <StableMetricCard label="Trilha" value={stats.feitasTrilha} sub="feitas na trilha" accent="blue" />
-                <StableMetricCard label="Imersão" value={stats.feitasImersao} sub="feitas na imersão" accent="purple" />
+                <StableMetricCard label="Banco BQHZ" value={stats.feitasImersao} sub="feitas no Banco BQHZ" accent="purple" />
               </div>
               <div className={`rounded-[24px] p-5 md:p-6 ${isDark?'bg-[#1E1E1E] border border-[#2A2A2A]':'bg-white border border-gray-200 shadow-sm'}`}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -7863,7 +10837,7 @@
                       style={{ width: `${Math.min(100, (position / Math.max(1, total)) * 100)}%` }}
                     ></div>
                     <span className={`relative z-10 text-[11px] sm:text-xs font-bold mx-auto truncate ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
-                      {isStudy ? 'Estudar questão' : isRetry ? 'Refazer questão' : isImmersao ? `Imersão ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : isDesafio ? `Desafio ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : isBancoMode ? `Simulado ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : isDailyBatch ? `Temas do dia ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : `Questão ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}`}
+                      {isStudy ? 'Estudar questão' : isRetry ? 'Refazer questão' : isImmersao ? `Banco BQHZ ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : isDesafio ? `Desafio ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : isBancoMode ? `Simulado ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : isDailyBatch ? `Temas do dia ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}` : `Questão ${String(position).padStart(2, '0')}/${String(total).padStart(2, '0')}`}
                     </span>
                   </div>
 
@@ -8266,6 +11240,7 @@
           const StableTrilhaView = useStableNestedComponent(TrilhaView);
           const StableLimboView = useStableNestedComponent(LimboView);
           const StableImersoesView = useStableNestedComponent(ImersoesView);
+          const StableAulasView = useStableNestedComponent(AulasView);
           const StableMiniBarChart = useStableNestedComponent(MiniBarChart);
           const StableMetricCard = useStableNestedComponent(MetricCard);
           const StableDesafioView = useStableNestedComponent(DesafioView);
@@ -8496,6 +11471,7 @@
                   {currentView === 'trilha' && <StableTrilhaView />}
                   {currentView === 'limbo' && <StableLimboView />}
                   {currentView === 'imersoes' && <StableImersoesView />}
+                  {currentView === 'aulas' && <StableAulasView />}
                   {currentView === 'metricas' && <StableMetricasView />}
                   {currentView === 'diagnostico' && <StableDiagnosticoView />}
                   {currentView === 'desafio' && <StableDesafioView />}
