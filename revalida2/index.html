@@ -24,7 +24,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
-    <link rel="stylesheet" href="./styles.bundle.css?v=20261126-ios">
+    <link rel="stylesheet" href="./styles.bundle.css?v=20261126-atualizacoes">
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -160,11 +160,110 @@
             display: block;
             background: #000;
         }
+        /* Faixa de atualização complementar abaixo do player na Imersão */
+        .hz-aula-update-body {
+            font-size: 14px;
+            line-height: 1.68;
+            color: #1f2937;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        .hz-aula-update-body > :first-child {
+            margin-top: 0 !important;
+        }
+        .hz-aula-update-body > :last-child {
+            margin-bottom: 0 !important;
+        }
+        .hz-aula-update-body p {
+            margin: 0 0 10px 0;
+        }
+        .hz-aula-update-body h1,
+        .hz-aula-update-body h2,
+        .hz-aula-update-body h3,
+        .hz-aula-update-body h4 {
+            font-weight: 800;
+            color: #111827;
+            margin: 14px 0 6px 0;
+            line-height: 1.35;
+        }
+        .hz-aula-update-body h2 { font-size: 16px; }
+        .hz-aula-update-body h3 { font-size: 15px; }
+        .hz-aula-update-body strong,
+        .hz-aula-update-body b {
+            font-weight: 700;
+            color: #111827;
+        }
+        .hz-aula-update-body ul {
+            list-style-type: disc;
+            padding-left: 1.35rem;
+            margin: 6px 0 10px 0;
+        }
+        .hz-aula-update-body ol {
+            list-style-type: decimal;
+            padding-left: 1.35rem;
+            margin: 6px 0 10px 0;
+        }
+        .hz-aula-update-body li {
+            margin: 3px 0;
+        }
+        .hz-aula-update-body a {
+            color: #1a73e8;
+            text-decoration: underline;
+            word-break: break-word;
+        }
+        .hz-aula-update-body a:hover {
+            color: #1557b0;
+        }
+        .hz-aula-update-body img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 10px;
+            margin: 12px auto;
+            cursor: zoom-in;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+        }
+        .hz-aula-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 12px 0;
+            border-radius: 8px;
+        }
+        .hz-aula-update-body table {
+            display: table;
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+            font-size: 13px;
+            background: #ffffff;
+        }
+        .hz-aula-update-body th,
+        .hz-aula-update-body td {
+            border: 1px solid #cbd5e1;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+            color: #1f2937;
+        }
+        .hz-aula-update-body th {
+            background: #dce8f2;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .hz-aula-update-body blockquote {
+            border-left: 4px solid #1a73e8;
+            background: rgba(26, 115, 232, 0.08);
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin: 10px 0;
+            color: #1f2937;
+        }
     </style>
 </head>
 <body class="bg-[#121212] m-0 p-0 overflow-hidden">
     <div id="root"></div>
 
-    <script src="./app.bundle.js?v=20261126-ios"></script>
+    <script src="./app.bundle.js?v=20261126-atualizacoes"></script>
 </body>
 </html>
