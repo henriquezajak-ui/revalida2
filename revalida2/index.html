@@ -43,19 +43,7 @@
     <!-- Babel para JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- PDF.js para leitura nativa e marca-texto no próprio site -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        window.FirebaseDeps = {
-            initializeApp, getAuth, signInAnonymously, signInWithCustomToken,
-            getFirestore, doc, getDoc, setDoc, onSnapshot
-        };
-    </script>
+    <!-- PDF.js carregado sob demanda por ensurePdfJsLoaded() ao abrir um PDF -->
     <style>
         html, body, #root {
             width: 100%;
@@ -113,7 +101,7 @@
             }
         }
         @media (pointer: coarse) and (max-width: 1180px) {
-            input[type="text"], input[type="date"], input[type="search"], input[type="password"], select, textarea {
+            input[type="text"], input[type="number"], input[type="date"], input[type="search"], input[type="password"], select, textarea {
                 font-size: max(16px, 1em);
             }
             .hz-touch-noblur,
@@ -2387,6 +2375,7 @@
         const PDFJS_ALT_SRC = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js';
         const PDFJS_ALT_WORKER = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         const aulasPdfBytesCache = new Map();
+        let aulasPdfJsLoadPromise = null;
 
         function ensurePdfJsLoaded() {
           const configure = (lib, workerUrl) => {
@@ -2401,6 +2390,7 @@
           if (window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function') {
             return Promise.resolve(configure(window.pdfjsLib, PDFJS_MAIN_WORKER));
           }
+          if (aulasPdfJsLoadPromise) return aulasPdfJsLoadPromise;
           const loadScript = (src) => new Promise((resolve, reject) => {
             const s = document.createElement('script');
             s.src = src;
@@ -2409,9 +2399,14 @@
             s.onerror = () => reject(new Error('Falha ao baixar leitor PDF.js.'));
             document.head.appendChild(s);
           });
-          return loadScript(PDFJS_MAIN_SRC)
+          aulasPdfJsLoadPromise = loadScript(PDFJS_MAIN_SRC)
             .then(lib => configure(lib, PDFJS_MAIN_WORKER))
-            .catch(() => loadScript(PDFJS_ALT_SRC).then(lib => configure(lib, PDFJS_ALT_WORKER)));
+            .catch(() => loadScript(PDFJS_ALT_SRC).then(lib => configure(lib, PDFJS_ALT_WORKER)))
+            .catch(err => {
+              aulasPdfJsLoadPromise = null;
+              throw err;
+            });
+          return aulasPdfJsLoadPromise;
         }
 
         function base64ToUint8Array(base64Str) {
@@ -4179,11 +4174,24 @@
             (async () => {
               await loadAulasCatalog({ manual: false, forceRefresh: false, silent: true });
               if (cancelled) return;
-              timer = setTimeout(() => {
-                if (!cancelled) {
-                  loadAulasCatalog({ manual: false, forceRefresh: true, silent: true });
+              let needsBackgroundDriveSync = true;
+              try {
+                const cached = JSON.parse(localStorage.getItem(AULAS_CACHE_KEY) || '{}');
+                const cat = cached && cached.catalog && typeof cached.catalog === 'object' ? cached.catalog : null;
+                const hasItems = Array.isArray(cat?.specialties) && cat.specialties.length > 0 && ((Number(cat?.totalVideos || 0) + Number(cat?.totalPdfs || 0)) > 0);
+                const syncedMs = Date.parse(String(cat?.syncedAt || '')) || 0;
+                const AULAS_AUTO_SYNC_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+                if (hasItems && syncedMs > 0 && (Date.now() - syncedMs) <= AULAS_AUTO_SYNC_MAX_AGE_MS) {
+                  needsBackgroundDriveSync = false;
                 }
-              }, 350);
+              } catch {}
+              if (needsBackgroundDriveSync) {
+                timer = setTimeout(() => {
+                  if (!cancelled) {
+                    loadAulasCatalog({ manual: false, forceRefresh: true, silent: true });
+                  }
+                }, 4000);
+              }
             })();
             return () => {
               cancelled = true;
@@ -5398,42 +5406,32 @@
           }, [cloudSyncReady]);
 
           useEffect(() => {
-             let attempts = 0;
-             const maxAttempts = 100; // até 5 segundos; evita polling infinito se o CDN falhar.
-             let checkInterval = setInterval(() => {
-                attempts++;
-                if (!window.FirebaseDeps) {
-                   if (attempts >= maxAttempts) {
-                      clearInterval(checkInterval);
-                      console.warn('Firebase SDK indisponível; o site continuará usando o serviço de progresso principal.');
+             if (typeof __firebase_config === 'undefined' || !window.FirebaseDeps) {
+                setFbLoaded(true);
+                return undefined;
+             }
+             try {
+                const config = JSON.parse(__firebase_config);
+                if (!config.apiKey) { setFbLoaded(true); return undefined; }
+                const app = window.FirebaseDeps.initializeApp(config);
+                const auth = window.FirebaseDeps.getAuth(app);
+                const firestore = window.FirebaseDeps.getFirestore(app);
+                setDb(firestore);
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                const authenticate = async () => {
+                   try {
+                      if (token) await window.FirebaseDeps.signInWithCustomToken(auth, token);
+                      else await window.FirebaseDeps.signInAnonymously(auth);
+                      setUser(auth.currentUser);
+                      setFbLoaded(true);
+                   } catch (e) {
+                      console.error('Auth erro:', e);
                       setFbLoaded(true);
                    }
-                   return;
-                }
-                clearInterval(checkInterval);
-                try {
-                   const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-                   if (!config.apiKey) { setFbLoaded(true); return; }
-                   const app = window.FirebaseDeps.initializeApp(config);
-                   const auth = window.FirebaseDeps.getAuth(app);
-                   const firestore = window.FirebaseDeps.getFirestore(app);
-                   setDb(firestore);
-                   const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                   const authenticate = async () => {
-                      try {
-                         if (token) await window.FirebaseDeps.signInWithCustomToken(auth, token);
-                         else await window.FirebaseDeps.signInAnonymously(auth);
-                         setUser(auth.currentUser);
-                         setFbLoaded(true);
-                      } catch (e) {
-                         console.error('Auth erro:', e);
-                         setFbLoaded(true);
-                      }
-                   };
-                   authenticate();
-                } catch(e) { console.error('Firebase init erro:', e); setFbLoaded(true); }
-             }, 50);
-             return () => clearInterval(checkInterval);
+                };
+                authenticate();
+             } catch(e) { console.error('Firebase init erro:', e); setFbLoaded(true); }
+             return undefined;
           }, []);
 
           const handleSetIsDark = (val) => {
