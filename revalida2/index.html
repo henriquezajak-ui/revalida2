@@ -572,12 +572,17 @@
           const localBancoMetricsResetAt = String(local?.bancoMetricsResetAt || local?.storage?.hfoqo_banco_metrics_reset_at || '');
           const remoteBancoMetricsResetAt = String(remote?.bancoMetricsResetAt || remote?.storage?.hfoqo_banco_metrics_reset_at || '');
           const baselineBancoMetricsResetAt = String(baseline?.bancoMetricsResetAt || baseline?.storage?.hfoqo_banco_metrics_reset_at || '');
+          const localAulasVideosResetAt = String(local?.aulasVideosResetAt || local?.storage?.hfoqo_aulas_videos_reset_at || '');
+          const remoteAulasVideosResetAt = String(remote?.aulasVideosResetAt || remote?.storage?.hfoqo_aulas_videos_reset_at || '');
+          const baselineAulasVideosResetAt = String(baseline?.aulasVideosResetAt || baseline?.storage?.hfoqo_aulas_videos_reset_at || '');
           const bqhzResetWinner = stamp(remoteResetAt) > stamp(baselineResetAt) && stamp(remoteResetAt) >= stamp(localResetAt)
             ? remote : stamp(localResetAt) > stamp(baselineResetAt) && stamp(localResetAt) > stamp(remoteResetAt) ? local : null;
           const bancoResetWinner = stamp(remoteBancoResetAt) > stamp(baselineBancoResetAt) && stamp(remoteBancoResetAt) >= stamp(localBancoResetAt)
             ? remote : stamp(localBancoResetAt) > stamp(baselineBancoResetAt) && stamp(localBancoResetAt) > stamp(remoteBancoResetAt) ? local : null;
           const bancoMetricsResetWinner = stamp(remoteBancoMetricsResetAt) > stamp(baselineBancoMetricsResetAt) && stamp(remoteBancoMetricsResetAt) >= stamp(localBancoMetricsResetAt)
             ? remote : stamp(localBancoMetricsResetAt) > stamp(baselineBancoMetricsResetAt) && stamp(localBancoMetricsResetAt) > stamp(remoteBancoMetricsResetAt) ? local : null;
+          const aulasVideosResetWinner = stamp(remoteAulasVideosResetAt) > stamp(baselineAulasVideosResetAt) && stamp(remoteAulasVideosResetAt) >= stamp(localAulasVideosResetAt)
+            ? remote : stamp(localAulasVideosResetAt) > stamp(baselineAulasVideosResetAt) && stamp(localAulasVideosResetAt) > stamp(remoteAulasVideosResetAt) ? local : null;
 
           const localStorageData = local && hfoqoIsPlainObject(local.storage) ? local.storage : {};
           const remoteStorageData = remote && hfoqoIsPlainObject(remote.storage) ? remote.storage : {};
@@ -686,6 +691,32 @@
             else delete storage.hfoqo_banco_round_results_v1;
             mergeSharedRecords('hfoqo_diagnosis_answers_v1', bancoMetricsResetWinner, true);
           }
+          if (aulasVideosResetWinner) {
+            const winnerStore = aulasVideosResetWinner.storage || {};
+            const parsedWinnerAulas = hfoqoParseStorageValue(winnerStore.hfoqo_aulas_progress_v1);
+            const winnerAppAulas = hfoqoIsPlainObject(aulasVideosResetWinner.appState?.aulasProgress)
+              ? aulasVideosResetWinner.appState.aulasProgress
+              : (parsedWinnerAulas.parsed && hfoqoIsPlainObject(parsedWinnerAulas.value) ? parsedWinnerAulas.value : {});
+            const parsedStorageAulas = hfoqoParseStorageValue(storage.hfoqo_aulas_progress_v1);
+            const baseAulasPdfs = hfoqoIsPlainObject(appState.aulasProgress?.pdfs)
+              ? appState.aulasProgress.pdfs
+              : (parsedStorageAulas.parsed && hfoqoIsPlainObject(parsedStorageAulas.value?.pdfs) ? parsedStorageAulas.value.pdfs : {});
+            const winnerAulasPdfs = hfoqoIsPlainObject(winnerAppAulas?.pdfs) ? winnerAppAulas.pdfs : {};
+            const mergedPdfs = { ...baseAulasPdfs };
+            Object.keys(winnerAulasPdfs).forEach(pid => {
+              const cur = mergedPdfs[pid];
+              const inc = winnerAulasPdfs[pid];
+              if (!cur) { mergedPdfs[pid] = inc; return; }
+              if (stamp(inc?.highlightsUpdatedAt) >= stamp(cur?.highlightsUpdatedAt)) mergedPdfs[pid] = inc;
+            });
+            const winnerVideos = hfoqoIsPlainObject(winnerAppAulas?.videos) ? winnerAppAulas.videos : {};
+            const winnerLastOpened = hfoqoIsPlainObject(winnerAppAulas?.lastOpened) ? winnerAppAulas.lastOpened : null;
+            const nextAulas = { videos: winnerVideos, pdfs: mergedPdfs, lastOpened: winnerLastOpened };
+            appState.aulasProgress = nextAulas;
+            storage.hfoqo_aulas_progress_v1 = JSON.stringify(nextAulas);
+            const resetStampStr = String(aulasVideosResetWinner.aulasVideosResetAt || winnerStore.hfoqo_aulas_videos_reset_at || '');
+            if (resetStampStr) storage.hfoqo_aulas_videos_reset_at = resetStampStr;
+          }
 
           return {
             schema: 1,
@@ -694,6 +725,7 @@
             resetAt: String(bqhzResetWinner?.resetAt || remoteResetAt || localResetAt || baselineResetAt || ''),
             bancoResetAt: String(bancoResetWinner?.bancoResetAt || remoteBancoResetAt || localBancoResetAt || baselineBancoResetAt || ''),
             bancoMetricsResetAt: String(bancoMetricsResetWinner?.bancoMetricsResetAt || remoteBancoMetricsResetAt || localBancoMetricsResetAt || baselineBancoMetricsResetAt || ''),
+            aulasVideosResetAt: String(aulasVideosResetWinner?.aulasVideosResetAt || remoteAulasVideosResetAt || localAulasVideosResetAt || baselineAulasVideosResetAt || ''),
             storage, appState
           };
         }
@@ -701,7 +733,8 @@
           if (!a || !b) return false;
           return hfoqoSyncEqual(a.storage || {}, b.storage || {}) && hfoqoSyncEqual(a.appState || {}, b.appState || {}) &&
             String(a.resetAt || '') === String(b.resetAt || '') && String(a.bancoResetAt || '') === String(b.bancoResetAt || '') &&
-            String(a.bancoMetricsResetAt || '') === String(b.bancoMetricsResetAt || '');
+            String(a.bancoMetricsResetAt || '') === String(b.bancoMetricsResetAt || '') &&
+            String(a.aulasVideosResetAt || '') === String(b.aulasVideosResetAt || '');
         }
 
         async function progressApi(action, params = {}, timeout = 30000) {
@@ -3656,6 +3689,7 @@
              try { return JSON.parse(localStorage.getItem('hfoqo_biblioteca_status') || '{}'); } catch { return {}; }
           });
           const [selectedLibraryTema, setSelectedLibraryTema] = useState(null);
+          const [librarySearchQuery, setLibrarySearchQuery] = useState('');
           
           // Biblioteca: primeiro usa o cache local e depois atualiza a Planilha em segundo plano.
           const BIBLIOTECA_CACHE_KEY = 'hfoqo_biblioteca_resumos_cache_v1';
@@ -4431,7 +4465,7 @@
           const [libFullscreen, setLibFullscreen] = useState(false);
           const [libToolboxOpen, setLibToolboxOpen] = useState(false);
           const [libMarkerMode, setLibMarkerMode] = useState(0); // 0=normal, 1=marca-texto de texto, 2=borracha de texto
-          const [libDrawMode, setLibDrawMode] = useState('off'); // off | pen | eraser
+          const [libDrawMode, setLibDrawMode] = useState('off'); // off | pen | highlighter | eraser
           const [libMarkerColor, setLibMarkerColor] = useState(() => {
              try {
                const saved = localStorage.getItem('hfoqo_biblioteca_marker_color');
@@ -4483,6 +4517,7 @@
               resetAt: (() => { try { return localStorage.getItem('hfoqo_progress_reset_at') || ''; } catch { return ''; } })(),
               bancoResetAt: (() => { try { return localStorage.getItem('hfoqo_banco_reset_at') || ''; } catch { return ''; } })(),
               bancoMetricsResetAt: (() => { try { return localStorage.getItem('hfoqo_banco_metrics_reset_at') || ''; } catch { return ''; } })(),
+              aulasVideosResetAt: (() => { try { return localStorage.getItem('hfoqo_aulas_videos_reset_at') || ''; } catch { return ''; } })(),
               storage,
               appState: {
                 startDate, examDate, dailyQuestionGoal, dailyPlan, activeRound, bancoActiveRound, isDark, desafioSettings,
@@ -4499,11 +4534,13 @@
             const incomingResetAt = String(snapshot.resetAt || storage.hfoqo_progress_reset_at || '');
             const incomingBancoResetAt = String(snapshot.bancoResetAt || storage.hfoqo_banco_reset_at || '');
             const incomingBancoMetricsResetAt = String(snapshot.bancoMetricsResetAt || storage.hfoqo_banco_metrics_reset_at || '');
-            let localResetAt = '', localBancoResetAt = '', localBancoMetricsResetAt = '';
+            const incomingAulasVideosResetAt = String(snapshot.aulasVideosResetAt || storage.hfoqo_aulas_videos_reset_at || '');
+            let localResetAt = '', localBancoResetAt = '', localBancoMetricsResetAt = '', localAulasVideosResetAt = '';
             try {
               localResetAt = localStorage.getItem('hfoqo_progress_reset_at') || '';
               localBancoResetAt = localStorage.getItem('hfoqo_banco_reset_at') || '';
               localBancoMetricsResetAt = localStorage.getItem('hfoqo_banco_metrics_reset_at') || '';
+              localAulasVideosResetAt = localStorage.getItem('hfoqo_aulas_videos_reset_at') || '';
             } catch {}
             const incomingStamp = Date.parse(incomingResetAt) || 0;
             const localStamp = Date.parse(localResetAt) || 0;
@@ -4511,6 +4548,8 @@
             const localBancoStamp = Date.parse(localBancoResetAt) || 0;
             const incomingBancoMetricsStamp = Date.parse(incomingBancoMetricsResetAt) || 0;
             const localBancoMetricsStamp = Date.parse(localBancoMetricsResetAt) || 0;
+            const incomingAulasVideosStamp = Date.parse(incomingAulasVideosResetAt) || 0;
+            const localAulasVideosStamp = Date.parse(localAulasVideosResetAt) || 0;
             try {
               if (incomingStamp > localStamp) {
                 const exactProgressKeys = new Set([
@@ -4538,6 +4577,7 @@
               if (incomingResetAt) localStorage.setItem('hfoqo_progress_reset_at', incomingResetAt);
               if (incomingBancoResetAt) localStorage.setItem('hfoqo_banco_reset_at', incomingBancoResetAt);
               if (incomingBancoMetricsResetAt) localStorage.setItem('hfoqo_banco_metrics_reset_at', incomingBancoMetricsResetAt);
+              if (incomingAulasVideosResetAt) localStorage.setItem('hfoqo_aulas_videos_reset_at', incomingAulasVideosResetAt);
               Object.entries(storage).forEach(([key, value]) => {
                 if (!key.startsWith('hfoqo_') || HZ_SYNC_EXCLUDED_KEYS.has(key) || value == null) return;
                 localStorage.setItem(key, String(value));
@@ -4551,7 +4591,14 @@
             const arr = (value, fallback = []) => Array.isArray(value) ? value : fallback;
             const obj = (value, fallback = {}) => value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
             setBibliotecaStatus(obj(a.bibliotecaStatus, fromStorage('hfoqo_biblioteca_status', bibliotecaStatus)));
-            setAulasProgress(prev => mergeAulasProgress(prev, obj(a.aulasProgress, fromStorage('hfoqo_aulas_progress_v1', {}))));
+            const incomingAulas = normalizeAulasProgress(obj(a.aulasProgress, fromStorage('hfoqo_aulas_progress_v1', {})));
+            setAulasProgress(prev => {
+              if (incomingAulasVideosStamp > localAulasVideosStamp) {
+                const mergedPdfs = mergeAulasProgress({ videos: {}, pdfs: normalizeAulasProgress(prev).pdfs, lastOpened: null }, incomingAulas).pdfs;
+                return normalizeAulasProgress({ videos: incomingAulas.videos, pdfs: mergedPdfs, lastOpened: incomingAulas.lastOpened });
+              }
+              return mergeAulasProgress(prev, incomingAulas);
+            });
             setCompletedQuestionIds(arr(a.completedQuestionIds, fromStorage('hfoqo_completed_questions', completedQuestionIds)).map(String));
             setCompletedImmersaoQuestionIds(arr(a.completedImmersaoQuestionIds, fromStorage('hfoqo_completed_immersao_questions', completedImmersaoQuestionIds)).map(String));
             setCompletedThemeHistory(arr(a.completedThemeHistory, fromStorage('hfoqo_completed_theme_history', completedThemeHistory)).map(String).filter(id => String(id).startsWith('topic:')));
@@ -6220,12 +6267,39 @@
             try {
               if (!progressUserId) throw new Error('Usuário de progresso ainda não foi identificado.');
               // O servidor limpa o histórico e grava um snapshot de reset na nuvem para
-              // que aparelhos que estavam offline não restaurem o Desafio antigo.
-              const result = await callCloudSyncApi('resetProgress', {
-                userId: progressUserId,
-                scope,
-                dateKey: today
-              }, 45000);
+              // que aparelhos que estavam offline não restaurem o histórico antigo.
+              let result;
+              let usedFallbackSave = false;
+              try {
+                result = await callCloudSyncApi('resetProgress', {
+                  userId: progressUserId,
+                  scope,
+                  dateKey: today
+                }, 45000);
+              } catch (resetErr) {
+                const errMsg = String(resetErr?.message || resetErr || '');
+                if (scope === 'aulas_videos' && /não reconhecido|nao reconhecido/i.test(errMsg)) {
+                  const resetAt = new Date().toISOString();
+                  const preservedPdfs = normalizeAulasProgress(aulasProgress).pdfs;
+                  const clearedAulas = normalizeAulasProgress({ videos: {}, pdfs: preservedPdfs, lastOpened: null });
+                  const snapshot = buildCloudSyncSnapshot();
+                  snapshot.aulasVideosResetAt = resetAt;
+                  snapshot.storage = {
+                    ...(snapshot.storage || {}),
+                    hfoqo_aulas_progress_v1: JSON.stringify(clearedAulas),
+                    hfoqo_aulas_videos_reset_at: resetAt
+                  };
+                  snapshot.appState = {
+                    ...(snapshot.appState || {}),
+                    aulasProgress: clearedAulas
+                  };
+                  const saved = await callCloudSyncApi('saveUserSyncState', { userId: progressUserId, data: snapshot }, 45000);
+                  result = { ok: true, scope, userId: progressUserId, aulasVideosResetAt: resetAt, sync: saved };
+                  usedFallbackSave = true;
+                } else {
+                  throw resetErr;
+                }
+              }
 
               if (scope === 'all') {
                 const resetAt = String(result?.resetAt || new Date().toISOString());
@@ -6286,6 +6360,43 @@
                 setRoundCompletion(null);
                 // Trigger a fresh snapshot after React has committed the empty state.
                 window.setTimeout(() => cloudSyncFunctionsRef.current.saveNow?.(), 700);
+              } else if (scope === 'aulas_videos') {
+                const resetAt = String(result?.aulasVideosResetAt || new Date().toISOString());
+                const clearedAulas = normalizeAulasProgress({
+                  videos: {},
+                  pdfs: normalizeAulasProgress(aulasProgress).pdfs,
+                  lastOpened: null
+                });
+                try {
+                  localStorage.setItem(AULAS_PROGRESS_KEY, JSON.stringify(clearedAulas));
+                  localStorage.setItem('hfoqo_aulas_videos_reset_at', resetAt);
+                  if (usedFallbackSave) {
+                    const snap = buildCloudSyncSnapshot();
+                    const savedBaseline = {
+                      ...snap,
+                      aulasVideosResetAt: resetAt,
+                      storage: {
+                        ...(snap.storage || {}),
+                        hfoqo_aulas_progress_v1: JSON.stringify(clearedAulas),
+                        hfoqo_aulas_videos_reset_at: resetAt
+                      },
+                      appState: {
+                        ...(snap.appState || {}),
+                        aulasProgress: clearedAulas
+                      },
+                      updatedAt: String(result?.sync?.updatedAt || resetAt)
+                    };
+                    cloudSyncBaselineRef.current = savedBaseline;
+                    localStorage.setItem(HZ_SYNC_BASELINE_KEY, JSON.stringify(savedBaseline));
+                  } else {
+                    localStorage.removeItem(HZ_SYNC_BASELINE_KEY);
+                    cloudSyncBaselineRef.current = null;
+                  }
+                } catch (storageError) { console.warn('Limpeza local dos vídeos:', storageError); }
+                setAulasProgress(clearedAulas);
+                if (!usedFallbackSave) {
+                  window.setTimeout(() => cloudSyncFunctionsRef.current.saveNow?.(), 700);
+                }
               } else {
                 // Não recarregar o esquema legado aqui: getState não contém questionStates
                 // e poderia zerar/ressuscitar estados locais. O endpoint já atualizou o snapshot remoto.
@@ -6305,7 +6416,9 @@
                 ? `Reset de hoje concluído. Questões: ${removed.questions || 0}, respostas: ${removed.answers || 0}, eventos: ${removed.events || 0}.`
                 : scope === 'metrics'
                   ? `Métricas resetadas. Respostas removidas: ${removed.answers || 0}.`
-                  : 'Histórico geral zerado. Questões concluídas, temas históricos, Desafio Diário, Limbo, respostas e rodadas ativas foram limpos. Suas anotações pessoais da Biblioteca foram preservadas.';
+                  : scope === 'aulas_videos'
+                    ? 'Progresso dos vídeos resetado com sucesso. Todas as videoaulas da Imersão voltaram para 0% (não iniciadas), como no primeiro acesso. Suas questões, resumos e marcações em PDFs foram preservados.'
+                    : 'Histórico geral zerado. Questões concluídas, temas históricos, Desafio Diário, Limbo, respostas e rodadas ativas foram limpos. Suas anotações pessoais da Biblioteca foram preservadas.';
               window.alert(msg);
               return result;
             } catch (e) {
@@ -6504,16 +6617,31 @@
           const SettingsDrawer = () => {
             if (!showSettings) return null;
             return (
-              <div className="fixed inset-0 z-[100000] flex justify-end bg-black/55 sm:bg-black/50 sm:backdrop-blur-sm hz-touch-noblur transition-opacity overflow-hidden">
-                <div className="w-full max-w-sm hz-vh-full max-h-full bg-white dark:bg-[#1A1A1A] p-6 shadow-2xl flex flex-col overflow-hidden transition-transform transform translate-x-0" style={{paddingTop:'calc(24px + var(--hfoqo-safe-top, 0px))', boxSizing:'border-box'}}>
-                  <div className="flex justify-between items-center mb-8">
+              <div
+                onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
+                className="fixed inset-0 z-[100000] flex justify-end bg-black/55 sm:bg-black/50 sm:backdrop-blur-sm hz-touch-noblur transition-opacity overflow-hidden"
+              >
+                <div className="w-full max-w-md hz-vh-full max-h-full bg-white dark:bg-[#1A1A1A] shadow-2xl flex flex-col overflow-hidden transition-transform transform translate-x-0">
+                  <div
+                    className="shrink-0 flex items-center justify-between gap-3 px-5 pb-4 border-b border-gray-200 dark:border-[#2c2c2c] bg-white dark:bg-[#1A1A1A]"
+                    style={{ paddingTop: 'calc(16px + var(--hfoqo-safe-top, 0px))', boxSizing: 'border-box' }}
+                  >
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">Configurar Plano</h2>
-                    <button type="button" onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-900 dark:hover:text-white">
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings(false)}
+                      aria-label="Fechar Configurar Plano"
+                      className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 dark:bg-[#2A2A2A] text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#333] transition-colors shrink-0"
+                    >
                       <Icons.X />
                     </button>
                   </div>
-                  
-                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 space-y-6">
+
+                  <div
+                    data-settings-drawer-scroll="1"
+                    className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-5 space-y-6"
+                    style={{ WebkitOverflowScrolling: 'touch', paddingBottom: 'calc(28px + env(safe-area-inset-bottom, 0px))' }}
+                  >
                     <div className="p-4 rounded-xl bg-gray-100 dark:bg-[#222]">
                       <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total de Questões no Banco</p>
                       <p className="text-2xl font-bold text-gray-900 dark:text-white">{DATABASE.totalQuestoes}</p>
@@ -6638,7 +6766,7 @@
                               value={aulasFolderInput}
                               onChange={e => setAulasFolderInput(e.target.value)}
                               placeholder="https://drive.google.com/drive/folders/..."
-                              className="w-full rounded-xl px-3 py-2 text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
+                              className="w-full rounded-xl px-3 py-2 text-base sm:text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
                             />
                             <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
                               Execute <code className="px-1 py-0.5 rounded bg-purple-500/15 text-purple-500 dark:text-purple-300">setupAulasDrive()</code> no Apps Script para criar <strong>HZ MED - Aulas</strong> ou cole outro link acima.
@@ -6677,7 +6805,7 @@
                                 value={aulasApiKeyInput}
                                 onChange={e => setAulasApiKeyInput(e.target.value)}
                                 placeholder="AIzaSy..."
-                                className="flex-1 min-w-0 rounded-xl px-3 py-2 text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
+                                className="flex-1 min-w-0 rounded-xl px-3 py-2 text-base sm:text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
                               />
                               <button
                                 type="submit"
@@ -6769,22 +6897,35 @@
                         {stats.questionsLeft > 0 && dailyQuestionGoal !== null && Number(dailyQuestionGoal) > stats.questionsLeft ? <><br/><span className="text-xs">A programação de hoje ficará limitada às {stats.questionsLeft} questões restantes.</span></> : null}
                       </p>
                     </div>
-                  </div>
 
-                  <div className="space-y-2 mt-6 mb-4">
-                    <div className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Gerenciar histórico</div>
-                    <button type="button" onClick={() => { if (window.confirm('Resetar as questões feitas hoje?')) resetProgress('today'); }} className="w-full py-3 rounded-xl border border-orange-300/50 bg-orange-500/10 text-orange-600 dark:text-orange-300 font-bold text-sm text-left px-4">↻ Resetar questões feitas hoje</button>
-                    <button type="button" onClick={() => { if (window.confirm('Resetar as métricas e o histórico de respostas?')) resetProgress('metrics'); }} className="w-full py-3 rounded-xl border border-blue-300/50 bg-blue-500/10 text-blue-600 dark:text-blue-300 font-bold text-sm text-left px-4">↺ Resetar métricas</button>
-                    <button type="button" onClick={() => { if (window.confirm('Resetar TODO o histórico geral? Esta ação limpa o progresso salvo, respostas, Limbo e Desafios.')) resetProgress('all'); }} className="w-full py-3 rounded-xl border border-red-300/50 bg-red-500/10 text-red-600 dark:text-red-300 font-bold text-sm text-left px-4">⚠ Resetar todo histórico geral</button>
-                  </div>
-
-                  <button type="button" onClick={reprogramDailyPlan} className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-colors">
-                    Salvar e Reprogramar Trilha
-                  </button>
-                  <div className="mt-5 pt-4 border-t border-gray-200 dark:border-[#333]">
-                    <button type="button" onClick={() => logoutArea('main')} className="w-full py-3 rounded-xl border border-red-300/60 bg-red-500/10 text-red-600 dark:text-red-300 font-black transition-colors hover:bg-red-500/15">
-                      ↪ Sair do BQHZ
+                    <button type="button" onClick={reprogramDailyPlan} className="w-full py-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-colors">
+                      Salvar e Reprogramar Trilha
                     </button>
+
+                    <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-[#333]">
+                      <div className="text-xs font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">Gerenciar histórico</div>
+                      <button type="button" onClick={() => { if (window.confirm('Resetar as questões feitas hoje?')) resetProgress('today'); }} className="w-full py-3 rounded-xl border border-orange-300/50 bg-orange-500/10 text-orange-600 dark:text-orange-300 font-bold text-sm text-left px-4">↻ Resetar questões feitas hoje</button>
+                      <button type="button" onClick={() => { if (window.confirm('Resetar as métricas e o histórico de respostas?')) resetProgress('metrics'); }} className="w-full py-3 rounded-xl border border-blue-300/50 bg-blue-500/10 text-blue-600 dark:text-blue-300 font-bold text-sm text-left px-4">↺ Resetar métricas</button>
+                      <button
+                        type="button"
+                        data-reset-videos-btn="1"
+                        onClick={() => {
+                          if (window.confirm('Resetar todo o progresso dos vídeos da Imersão? Todas as aulas voltarão para 0% (não iniciadas), como no primeiro acesso. Suas questões, resumos e marcações nos PDFs serão preservados.')) {
+                            resetProgress('aulas_videos');
+                          }
+                        }}
+                        className="w-full py-3 rounded-xl border border-purple-300/50 bg-purple-500/10 text-purple-600 dark:text-purple-300 font-bold text-sm text-left px-4"
+                      >
+                        🎬 Resetar progresso dos vídeos
+                      </button>
+                      <button type="button" onClick={() => { if (window.confirm('Resetar TODO o histórico geral? Esta ação limpa o progresso salvo, respostas, Limbo e Desafios.')) resetProgress('all'); }} className="w-full py-3 rounded-xl border border-red-300/50 bg-red-500/10 text-red-600 dark:text-red-300 font-bold text-sm text-left px-4">⚠ Resetar todo histórico geral</button>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-200 dark:border-[#333]">
+                      <button type="button" onClick={() => logoutArea('main')} className="w-full py-3 rounded-xl border border-red-300/60 bg-red-500/10 text-red-600 dark:text-red-300 font-black transition-colors hover:bg-red-500/15">
+                        ↪ Sair do BQHZ
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8072,6 +8213,102 @@
           const BibliotecaView = () => {
              const ALL_LIBRARY = [...LIBRARY_DATA, ...fetchedResumos];
 
+             const extractBibliotecaPlainText = (item) => {
+                 if (!item) return '';
+                 const toPlain = (htmlStr) => {
+                     const raw = String(htmlStr || '');
+                     if (!raw.trim()) return '';
+                     try {
+                         if (typeof DOMParser !== 'undefined') {
+                             const doc = new DOMParser().parseFromString(raw, 'text/html');
+                             return String(doc?.body?.textContent || '').replace(/\s+/g, ' ').trim();
+                         }
+                     } catch {}
+                     return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                 };
+                 if (item.richHtml) return toPlain(item.richHtml);
+                 const parts = [];
+                 (Array.isArray(item.sections) ? item.sections : []).forEach(sec => {
+                     if (sec?.title) parts.push(String(sec.title).trim());
+                     if (sec?.content) parts.push(toPlain(sec.content));
+                     if (Array.isArray(sec?.list)) {
+                         sec.list.forEach(li => parts.push(toPlain(li)));
+                     }
+                 });
+                 return parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+             };
+
+             const buildBibliotecaSnippet = (bodyPlain, tokens) => {
+                 if (!bodyPlain || !tokens || !tokens.length) return '';
+                 let hitIndex = -1;
+                 const wordRegex = /\S+/g;
+                 let match;
+                 while ((match = wordRegex.exec(bodyPlain)) !== null) {
+                     const wordNorm = normalizeBancoSearchText(match[0]);
+                     if (tokens.some(tok => wordNorm.includes(tok))) {
+                         hitIndex = match.index;
+                         break;
+                     }
+                 }
+                 if (hitIndex < 0) return '';
+                 let start = Math.max(0, hitIndex - 40);
+                 if (start > 0) {
+                     const nextSpace = bodyPlain.indexOf(' ', start);
+                     if (nextSpace >= 0 && nextSpace < hitIndex) start = nextSpace + 1;
+                 }
+                 let end = Math.min(bodyPlain.length, start + 125);
+                 if (end < bodyPlain.length) {
+                     const lastSpace = bodyPlain.lastIndexOf(' ', end);
+                     if (lastSpace > hitIndex) end = lastSpace;
+                 }
+                 const prefix = start > 0 ? '…' : '';
+                 const suffix = end < bodyPlain.length ? '…' : '';
+                 return `${prefix}${bodyPlain.slice(start, end).trim()}${suffix}`;
+             };
+
+             const librarySearchIndex = React.useMemo(() => {
+                 const list = [...LIBRARY_DATA, ...fetchedResumos];
+                 return list.map((item, originalIndex) => {
+                     const titlePlain = String(item?.title || '');
+                     const titleNorm = normalizeBancoSearchText(titlePlain);
+                     const bodyPlain = extractBibliotecaPlainText(item);
+                     const bodyNorm = normalizeBancoSearchText(bodyPlain);
+                     const fullNorm = `${titleNorm} ${bodyNorm}`.trim();
+                     return { item, originalIndex, titleNorm, bodyPlain, bodyNorm, fullNorm };
+                 });
+             }, [fetchedResumos]);
+
+             const librarySearchTokens = React.useMemo(
+                 () => getBancoSearchTokens(librarySearchQuery),
+                 [librarySearchQuery]
+             );
+
+             const libraryQueryNorm = React.useMemo(
+                 () => normalizeBancoSearchText(librarySearchQuery),
+                 [librarySearchQuery]
+             );
+
+             const filteredLibraryEntries = React.useMemo(() => {
+                 if (!librarySearchTokens.length) {
+                     return librarySearchIndex.map(entry => ({ ...entry, matchedInTitle: true, snippet: '' }));
+                 }
+                 const matched = [];
+                 librarySearchIndex.forEach(entry => {
+                     if (!matchesBancoSearchTokens(entry.fullNorm, librarySearchTokens)) return;
+                     const allInTitle = matchesBancoSearchTokens(entry.titleNorm, librarySearchTokens);
+                     const someInTitle = librarySearchTokens.some(tok => entry.titleNorm.includes(tok));
+                     let score = 3;
+                     if (libraryQueryNorm && entry.titleNorm.startsWith(libraryQueryNorm)) score = 0;
+                     else if (allInTitle) score = 1;
+                     else if (someInTitle) score = 2;
+                     const matchedInTitle = allInTitle;
+                     const snippet = matchedInTitle ? '' : buildBibliotecaSnippet(entry.bodyPlain, librarySearchTokens);
+                     matched.push({ ...entry, score, matchedInTitle, snippet });
+                 });
+                 matched.sort((a, b) => a.score - b.score || a.originalIndex - b.originalIndex);
+                 return matched;
+             }, [librarySearchIndex, librarySearchTokens, libraryQueryNorm]);
+
              // Marca-texto da Biblioteca: seleção real do texto, não desenho livre.
              const libraryHighlightStartRef = React.useRef(null);
              const libraryHighlightRangeRef = React.useRef(null);
@@ -8082,6 +8319,7 @@
                  if (!LIBRARY_MARKER_COLORS.some(item => item.color === color)) return;
                  setLibMarkerColor(color);
                  try { localStorage.setItem('hfoqo_biblioteca_marker_color', color); } catch {}
+                 notifyHfoqoCloudSyncNeeded();
              };
 
              const libraryCaretRangeFromPoint = (x, y) => {
@@ -8378,21 +8616,24 @@
                  restoreLibraryScroll(scrollPos);
              };
 
-             const clearLibraryHighlights = () => {
-                 const key = String(selectedLibraryTema || '');
-                 if (!key) return;
-                 if (!window.confirm('Apagar todas as marcações de texto deste resumo? O texto será mantido.')) return;
-                 const nextHighlights = { ...libraryHighlightsRef.current, [key]: [] };
-                 libraryHighlightsRef.current = nextHighlights;
-                 try { localStorage.setItem('hfoqo_biblioteca_highlights', JSON.stringify(nextHighlights)); } catch {}
-                 notifyHfoqoCloudSyncNeeded();
-                 if (libContentRef.current) libraryUnwrapHighlights(libContentRef.current);
-             };
-
              const saveLibraryDrawingMap = (next) => {
                  libraryDrawingsRef.current = next;
                  try { localStorage.setItem('hfoqo_biblioteca_drawings_v1', JSON.stringify(next)); notifyHfoqoCloudSyncNeeded(); }
                  catch (e) { console.warn('Não foi possível salvar os riscos da Biblioteca:', e); }
+             };
+             const clearAllLibraryAnnotations = () => {
+                 const key = String(selectedLibraryTema || '');
+                 if (!key) return;
+                 if (!window.confirm('Limpar todas as marcações e anotações deste resumo?')) return;
+                 const nextHighlights = { ...(libraryHighlightsRef.current || {}), [key]: [] };
+                 libraryHighlightsRef.current = nextHighlights;
+                 try { localStorage.setItem('hfoqo_biblioteca_highlights', JSON.stringify(nextHighlights)); } catch {}
+                 if (libContentRef.current) libraryUnwrapHighlights(libContentRef.current);
+                 saveLibraryDrawingMap({ ...(libraryDrawingsRef.current || {}), [key]: [] });
+                 redrawLibraryCanvas();
+                 setLibMarkerMode(0);
+                 setLibDrawMode('off');
+                 setLibToolboxOpen(false);
              };
              useEffect(() => {
                const reloadCloudAnnotations = () => {
@@ -8416,12 +8657,45 @@
                window.addEventListener('hfoqo-cloud-sync-applied', reloadCloudAnnotations);
                return () => window.removeEventListener('hfoqo-cloud-sync-applied', reloadCloudAnnotations);
              }, [selectedLibraryTema]);
+             React.useEffect(() => {
+                 if (!libToolboxOpen) return undefined;
+                 const onKeyDown = (e) => {
+                     if (e.key === 'Escape') setLibToolboxOpen(false);
+                 };
+                 window.addEventListener('keydown', onKeyDown);
+                 return () => window.removeEventListener('keydown', onKeyDown);
+             }, [libToolboxOpen]);
+             const libraryHexToRgba = (hex, alpha) => {
+                 const value = String(hex || '').replace('#', '');
+                 if (value.length !== 6) return `rgba(253,224,71,${alpha})`;
+                 const r = parseInt(value.slice(0, 2), 16);
+                 const g = parseInt(value.slice(2, 4), 16);
+                 const b = parseInt(value.slice(4, 6), 16);
+                 return `rgba(${r},${g},${b},${alpha})`;
+             };
+             const libraryDistancePointToSegment = (px, py, ax, ay, bx, by) => {
+                 const dx = bx - ax, dy = by - ay;
+                 if (dx === 0 && dy === 0) return Math.hypot(px - ax, py - ay);
+                 const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
+                 return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+             };
+             const getLibraryCanvasDpr = (width, height) => {
+                 const isCoarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
+                 let dpr = Math.max(1, Math.min(isCoarse ? 1.5 : 2, window.devicePixelRatio || 1));
+                 const area = Math.max(1, (Number(width) || 1) * (Number(height) || 1));
+                 const maxPixels = 12000000;
+                 if (area * dpr * dpr > maxPixels) {
+                     dpr = Math.max(0.75, Math.sqrt(maxPixels / area));
+                 }
+                 return dpr;
+             };
              const redrawLibraryCanvas = () => {
                  const canvas = libraryCanvasRef.current;
                  const root = libContentRef.current;
                  if (!canvas || !root) return;
                  const rect = root.getBoundingClientRect();
-                 const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                 if (!rect.width || !rect.height) return;
+                 const dpr = getLibraryCanvasDpr(rect.width, rect.height);
                  const ctx = canvas.getContext('2d');
                  if (!ctx) return;
                  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -8430,11 +8704,15 @@
                  for (const stroke of strokes) {
                      const points = Array.isArray(stroke.points) ? stroke.points : [];
                      if (points.length < 2) continue;
+                     const isHighlighter = stroke.mode === 'highlighter';
                      ctx.save();
-                     ctx.strokeStyle = stroke.color || '#ef4444';
-                     ctx.lineWidth = Number(stroke.width) || 3;
-                     ctx.lineCap = 'round';
+                     ctx.lineCap = isHighlighter ? 'square' : 'round';
                      ctx.lineJoin = 'round';
+                     ctx.globalCompositeOperation = 'source-over';
+                     ctx.strokeStyle = isHighlighter
+                         ? libraryHexToRgba(stroke.color || '#fde047', 0.20)
+                         : (stroke.color || '#ef4444');
+                     ctx.lineWidth = isHighlighter ? 12 : (Number(stroke.width) || 3.2);
                      ctx.beginPath();
                      ctx.moveTo(points[0][0] * rect.width, points[0][1] * rect.height);
                      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0] * rect.width, points[i][1] * rect.height);
@@ -8447,11 +8725,48 @@
                  const root = libContentRef.current;
                  if (!canvas || !root) return;
                  const rect = root.getBoundingClientRect();
-                 const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+                 if (!rect.width || !rect.height) return;
+                 const dpr = getLibraryCanvasDpr(rect.width, rect.height);
                  canvas.width = Math.max(1, Math.round(rect.width * dpr));
                  canvas.height = Math.max(1, Math.round(rect.height * dpr));
                  canvas.style.width = `${rect.width}px`;
                  canvas.style.height = `${rect.height}px`;
+                 redrawLibraryCanvas();
+             };
+             const eraseLibraryDrawingsAt = (clientX, clientY, radius = 12) => {
+                 const canvas = libraryCanvasRef.current;
+                 if (!canvas) return;
+                 const canvasRect = canvas.getBoundingClientRect();
+                 if (!canvasRect.width || !canvasRect.height) return;
+                 const localX = clientX - canvasRect.left;
+                 const localY = clientY - canvasRect.top;
+                 const key = String(selectedLibraryTema || '');
+                 const map = libraryDrawingsRef.current || {};
+                 const existing = Array.isArray(map[key]) ? map[key] : [];
+                 const next = [];
+                 for (const stroke of existing) {
+                     const pts = Array.isArray(stroke.points) ? stroke.points : [];
+                     if (pts.length < 2) continue;
+                     let chunk = [];
+                     const flush = () => {
+                         if (chunk.length >= 2) next.push({ ...stroke, points: chunk });
+                         chunk = [];
+                     };
+                     for (let i = 1; i < pts.length; i++) {
+                         const a = pts[i - 1], b = pts[i];
+                         const ax = a[0] * canvasRect.width, ay = a[1] * canvasRect.height;
+                         const bx = b[0] * canvasRect.width, by = b[1] * canvasRect.height;
+                         const hit = libraryDistancePointToSegment(localX, localY, ax, ay, bx, by) <= radius;
+                         if (hit) {
+                             flush();
+                             continue;
+                         }
+                         if (!chunk.length) chunk.push(a);
+                         chunk.push(b);
+                     }
+                     flush();
+                 }
+                 libraryDrawingsRef.current = { ...map, [key]: next };
                  redrawLibraryCanvas();
              };
              const libraryDrawPointerDown = (e) => {
@@ -8463,57 +8778,42 @@
                  e.preventDefault(); e.stopPropagation();
                  libraryDrawPointerRef.current = e.pointerId;
                  try { canvas.setPointerCapture?.(e.pointerId); } catch {}
+                 if (libDrawMode === 'eraser') {
+                     eraseLibraryDrawingsAt(e.clientX, e.clientY, e.pointerType === 'pen' ? 14 : 12);
+                     saveLibraryDrawingMap({ ...(libraryDrawingsRef.current || {}) });
+                     return;
+                 }
                  const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                  const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
                  const key = String(selectedLibraryTema || '');
                  const map = libraryDrawingsRef.current || {};
                  const existing = Array.isArray(map[key]) ? map[key].slice() : [];
-                 if (libDrawMode === 'eraser') {
-                     const px = e.clientX - rect.left, py = e.clientY - rect.top, radius = 15;
-                     const nextStrokes = existing.filter(stroke => {
-                         const pts = Array.isArray(stroke.points) ? stroke.points : [];
-                         for (let i = 1; i < pts.length; i++) {
-                             const ax=pts[i-1][0]*rect.width, ay=pts[i-1][1]*rect.height, bx=pts[i][0]*rect.width, by=pts[i][1]*rect.height;
-                             const dx=bx-ax, dy=by-ay, len=dx*dx+dy*dy;
-                             const t=len ? Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len)) : 0;
-                             if (Math.hypot(px-(ax+t*dx),py-(ay+t*dy)) <= radius) return false;
-                         }
-                         return true;
-                     });
-                     saveLibraryDrawingMap({ ...map, [key]: nextStrokes });
-                     redrawLibraryCanvas();
-                     return;
-                 }
-                 existing.push({ color: libMarkerColor || '#ef4444', width: 3, points: [[x, y]] });
-                 saveLibraryDrawingMap({ ...map, [key]: existing });
+                 existing.push({
+                     mode: libDrawMode,
+                     color: libMarkerColor || '#fde047',
+                     width: libDrawMode === 'highlighter' ? 12 : 3.2,
+                     points: [[x, y]]
+                 });
+                 libraryDrawingsRef.current = { ...map, [key]: existing };
              };
              const libraryDrawPointerMove = (e) => {
                  if (libraryDrawPointerRef.current !== e.pointerId || libDrawMode === 'off' || !libraryCanvasRef.current || !libContentRef.current) return;
                  e.preventDefault(); e.stopPropagation();
+                 if (libDrawMode === 'eraser') {
+                     eraseLibraryDrawingsAt(e.clientX, e.clientY, e.pointerType === 'pen' ? 14 : 12);
+                     return;
+                 }
                  const canvas = libraryCanvasRef.current, rect = canvas.getBoundingClientRect();
                  if (!rect.width || !rect.height) return;
                  const key = String(selectedLibraryTema || '');
                  const map = libraryDrawingsRef.current || {};
                  const strokes = Array.isArray(map[key]) ? map[key] : [];
-                 if (libDrawMode === 'eraser') {
-                     const px=e.clientX-rect.left, py=e.clientY-rect.top, radius=15;
-                     const kept = strokes.filter(stroke => {
-                         const pts=Array.isArray(stroke.points)?stroke.points:[];
-                         for(let i=1;i<pts.length;i++){
-                             const ax=pts[i-1][0]*rect.width, ay=pts[i-1][1]*rect.height, bx=pts[i][0]*rect.width, by=pts[i][1]*rect.height;
-                             const dx=bx-ax, dy=by-ay, len=dx*dx+dy*dy, t=len?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len)):0;
-                             if(Math.hypot(px-(ax+t*dx),py-(ay+t*dy))<=radius) return false;
-                         }
-                         return true;
-                     });
-                     saveLibraryDrawingMap({ ...map, [key]: kept }); redrawLibraryCanvas(); return;
-                 }
-                 const x=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
-                 const y=Math.max(0,Math.min(1,(e.clientY-rect.top)/rect.height));
-                 const updated=strokes.slice();
-                 const last=updated[updated.length-1];
-                 if(!last) return;
-                 last.points = [...last.points, [x,y]];
+                 const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                 const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                 const updated = strokes.slice();
+                 const last = updated[updated.length - 1];
+                 if (!last) return;
+                 last.points = [...last.points, [x, y]];
                  redrawLibraryCanvas();
              };
              const libraryDrawPointerUp = (e) => {
@@ -8522,12 +8822,6 @@
                  libraryDrawPointerRef.current = null;
                  try { libraryCanvasRef.current?.releasePointerCapture?.(e.pointerId); } catch {}
                  saveLibraryDrawingMap({ ...(libraryDrawingsRef.current || {}) });
-                 redrawLibraryCanvas();
-             };
-             const clearLibraryDrawings = () => {
-                 const key = String(selectedLibraryTema || '');
-                 if (!key || !window.confirm('Apagar os riscos feitos à mão neste resumo? As marcações de texto serão mantidas.')) return;
-                 saveLibraryDrawingMap({ ...(libraryDrawingsRef.current || {}), [key]: [] });
                  redrawLibraryCanvas();
              };
              React.useEffect(() => {
@@ -8573,48 +8867,70 @@
 
                  return (
                      <div data-hfoqo-library-page="1" className={libFullscreen ? 'fixed inset-0 z-[100000] flex flex-col bg-[#F4F1EA] dark:bg-[#121212] overflow-y-auto overflow-x-hidden animate-fade-in' : 'w-full min-w-0 max-w-3xl mx-auto flex flex-col min-h-full animate-fade-in pb-20 md:pb-0 bg-[#F4F1EA] dark:bg-[#121212]'} style={libFullscreen ? {paddingTop:'var(--hfoqo-safe-top, 0px)', boxSizing:'border-box', WebkitOverflowScrolling:'touch'} : undefined}>
-                         {/* Cabeçalho do resumo: rola junto com o conteúdo. */}
-                         <div className="flex flex-col gap-3 p-4 bg-white dark:bg-[#1E1E1E] border-b border-gray-200 dark:border-[#333] shadow-sm relative">
-                             <div className="flex items-center gap-3 min-w-0">
+                         {/* Cabeçalho do resumo com canetinha e tela cheia compactas. */}
+                         <div className="flex items-center justify-between gap-2 p-3 sm:p-4 bg-white dark:bg-[#1E1E1E] border-b border-gray-200 dark:border-[#333] shadow-sm relative z-[70]">
+                             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                                  <button onClick={() => { setSelectedLibraryTema(null); setLibFullscreen(false); setLibToolboxOpen(false); setLibMarkerMode(0); setLibDrawMode('off'); }} className="flex items-center gap-1 p-2 md:px-3 rounded-xl bg-gray-100 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#333] shrink-0">
                                      <Icons.ChevronLeft /> <span className="hidden md:inline font-bold text-sm">Voltar</span>
                                  </button>
-                                 <h2 className="text-base md:text-lg font-black text-gray-900 dark:text-gray-100 flex items-center gap-2 min-w-0">
+                                 <h2 className="text-base md:text-lg font-black text-gray-900 dark:text-gray-100 flex items-center gap-2 min-w-0 flex-1">
                                       <span className="text-2xl shrink-0">{t.emoji}</span>
                                       <span className="min-w-0 truncate px-3 py-2 rounded-xl border shadow-lg" style={{borderColor: t.themeColor || '#a855f7', background: `linear-gradient(100deg, ${t.themeBackground || '#211631'}, ${t.themeColor || '#a855f7'}42)`, color: contrastForBibliotecaHex(t.themeBackground || '#211631'), boxShadow: `0 0 18px ${t.themeColor || '#a855f7'}45`, textShadow: '0 0 10px rgba(168,85,247,0.18)'}}>{t.title}</span>
-                                  </h2>
+                                 </h2>
                              </div>
-                         </div>
-
-                         {/* Ferramentas recolhidas por padrão: a leitura permanece limpa. */}
-                         <div className="relative z-20 px-4 py-2 bg-white/95 dark:bg-[#1E1E1E]/95 backdrop-blur-md border-b border-gray-200 dark:border-[#333]">
-                             <div className="flex items-center justify-between gap-3">
-                                 <div className="min-w-0 text-xs text-gray-500 dark:text-gray-400 truncate" aria-live="polite">
-                                     {libMarkerMode === 1 ? `Marca-texto de texto ativo · ${LIBRARY_MARKER_COLORS.find(item => item.color === libMarkerColor)?.label || 'cor selecionada'}` : libMarkerMode === 2 ? 'Borracha de marcação de texto ativa' : libDrawMode === 'pen' ? 'Caneta livre ativa' : libDrawMode === 'eraser' ? 'Borracha de riscos ativa' : 'Modo leitura · ferramentas recolhidas'}
+                             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                 <div className="relative shrink-0 z-[120]">
+                                     <button
+                                         type="button"
+                                         data-biblioteca-pen-trigger="1"
+                                         onPointerDown={(e) => e.stopPropagation()}
+                                         onClick={(e) => { e.stopPropagation(); setLibToolboxOpen(v => !v); }}
+                                         title={libToolboxOpen ? 'Recolher ferramentas de anotação' : 'Abrir canetinha e ferramentas'}
+                                         aria-label={libToolboxOpen ? 'Recolher ferramentas de anotação' : 'Abrir ferramentas de anotação'}
+                                         aria-expanded={libToolboxOpen}
+                                         className={`w-9 h-9 rounded-full flex items-center justify-center text-base transition-colors ${libMarkerMode !== 0 || libDrawMode !== 'off' ? 'bg-purple-600 text-white shadow-md' : (isDark ? 'bg-[#2A2A2A] text-gray-300 hover:bg-[#333]' : 'bg-white/80 text-gray-600 border border-gray-200')}`}
+                                     >
+                                         🖊️
+                                     </button>
+                                     {libToolboxOpen && (
+                                         <div
+                                             data-biblioteca-pen-popover="1"
+                                             className={`absolute right-0 top-10 z-[120] w-[250px] max-w-[calc(100vw-2rem)] p-3 rounded-2xl border shadow-2xl ${isDark ? 'bg-[#1A1A1A] border-[#333] text-white' : 'bg-white border-gray-200 text-gray-900'}`}
+                                         >
+                                             <div className="flex items-center justify-between gap-2 mb-3">
+                                                 <span className="text-xs font-black uppercase tracking-wide opacity-70">Caneta e marca-texto</span>
+                                                 <span className="text-[10px] opacity-60">Toque, mouse ou caneta</span>
+                                             </div>
+                                             <div className="grid grid-cols-2 gap-2 mb-3">
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setLibMarkerMode(0); setLibDrawMode('off'); setLibToolboxOpen(false); }} className={`py-2 rounded-xl text-xs font-bold border ${libMarkerMode === 0 && libDrawMode === 'off' ? 'bg-gray-300 text-gray-900 border-gray-400' : 'bg-transparent border-gray-500/30'}`}>👆 Leitura normal</button>
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setLibMarkerMode(1); setLibDrawMode('off'); setLibToolboxOpen(false); }} className={`py-2 rounded-xl text-xs font-bold border ${libMarkerMode === 1 ? 'bg-yellow-300 text-black border-yellow-400' : 'bg-transparent border-gray-500/30'}`}>🖍️ Marca-texto</button>
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setLibMarkerMode(0); setLibDrawMode('pen'); setLibToolboxOpen(false); }} className={`py-2 rounded-xl text-xs font-bold border ${libDrawMode === 'pen' ? 'bg-purple-600 text-white border-purple-500' : 'bg-transparent border-gray-500/30'}`}>✏️ Caneta livre</button>
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setLibMarkerMode(0); setLibDrawMode('highlighter'); setLibToolboxOpen(false); }} className={`py-2 rounded-xl text-xs font-bold border ${libDrawMode === 'highlighter' ? 'bg-yellow-200 text-gray-900 border-yellow-400' : 'bg-transparent border-gray-500/30'}`}>🖍️ Risco largo</button>
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setLibMarkerMode(2); setLibDrawMode('off'); setLibToolboxOpen(false); }} className={`py-2 rounded-xl text-xs font-bold border ${libMarkerMode === 2 ? 'bg-gray-300 text-black border-gray-400' : 'bg-transparent border-gray-500/30'}`}>🧹 Apagar texto</button>
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => { setLibMarkerMode(0); setLibDrawMode('eraser'); setLibToolboxOpen(false); }} className={`py-2 rounded-xl text-xs font-bold border ${libDrawMode === 'eraser' ? 'bg-blue-300 text-gray-900 border-blue-400' : 'bg-transparent border-gray-500/30'}`}>🧽 Apagar riscos</button>
+                                                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={clearAllLibraryAnnotations} className="col-span-2 py-2 rounded-xl text-xs font-bold border bg-red-500/10 text-red-500 border-red-500/30">Limpar todas as marcações</button>
+                                             </div>
+                                             <div className="grid grid-cols-4 gap-2" role="group" aria-label="Cores do marca-texto">
+                                                 {LIBRARY_MARKER_COLORS.map(({ color, label }) => (
+                                                     <button key={color} type="button" title={label} aria-label={`Selecionar cor ${label}`} aria-pressed={libMarkerColor === color} onPointerDown={(e) => e.stopPropagation()} onClick={() => chooseLibraryMarkerColor(color)} className={`min-h-10 min-w-10 h-10 w-10 rounded-xl flex items-center justify-center border-2 transition ${libMarkerColor === color ? 'border-purple-500 bg-purple-500/10 scale-105' : 'border-gray-400/40'}`}>
+                                                         <span className="w-6 h-6 rounded-full border border-black/10 dark:border-white/10" style={{ background: color }} />
+                                                     </button>
+                                                 ))}
+                                             </div>
+                                         </div>
+                                     )}
                                  </div>
-                                 <div className="flex items-center gap-2 shrink-0">
-                                     <button type="button" onClick={() => setLibToolboxOpen(v => !v)} className={`h-10 w-10 rounded-xl flex items-center justify-center border shadow-sm ${libToolboxOpen || libMarkerMode !== 0 || libDrawMode !== 'off' ? 'bg-purple-600 text-white border-purple-500' : 'bg-gray-100 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-700'}`} title={libToolboxOpen ? 'Recolher ferramentas' : 'Abrir canetinha e ferramentas'} aria-label={libToolboxOpen ? 'Recolher ferramentas de anotação' : 'Abrir ferramentas de anotação'} aria-expanded={libToolboxOpen}>🖊️</button>
-                                     <button type="button" onClick={() => setLibFullscreen(!libFullscreen)} className="h-10 w-10 rounded-xl bg-gray-100 dark:bg-[#2A2A2A] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#333] flex items-center justify-center" title={libFullscreen ? 'Sair do modo de leitura ampliado' : 'Ampliar leitura'} aria-label="Alternar leitura ampliada"><Icons.Grid /></button>
-                                 </div>
+                                 <button
+                                     type="button"
+                                     onPointerDown={(e) => e.stopPropagation()}
+                                     onClick={() => setLibFullscreen(!libFullscreen)}
+                                     className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isDark ? 'bg-[#2A2A2A] text-gray-300 hover:bg-[#333]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                                     title={libFullscreen ? 'Sair do modo de leitura ampliado' : 'Ampliar leitura'}
+                                     aria-label="Alternar leitura ampliada"
+                                 >
+                                     <Icons.Grid />
+                                 </button>
                              </div>
-                             {libToolboxOpen && <div className="mt-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 p-3 space-y-3">
-                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                     <button type="button" onClick={() => { setLibMarkerMode(1); setLibDrawMode('off'); setLibToolboxOpen(false); }} className={`min-h-11 rounded-xl px-3 text-sm font-bold border ${libMarkerMode === 1 ? 'bg-yellow-300 text-gray-900 border-yellow-400' : 'bg-white dark:bg-[#242424] border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200'}`} title="Arraste sobre as palavras para marcar texto">🖍️ Marca-texto</button>
-                                     <button type="button" onClick={() => { setLibMarkerMode(0); setLibDrawMode('pen'); setLibToolboxOpen(false); }} className={`min-h-11 rounded-xl px-3 text-sm font-bold border ${libDrawMode === 'pen' ? 'bg-purple-600 text-white border-purple-500' : 'bg-white dark:bg-[#242424] border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200'}`} title="Escreva ou risque à mão livre com mouse, dedo ou caneta digital">✏️ Caneta livre</button>
-                                     <button type="button" onClick={() => { setLibMarkerMode(0); setLibDrawMode('eraser'); setLibToolboxOpen(false); }} className={`min-h-11 rounded-xl px-3 text-sm font-bold border ${libDrawMode === 'eraser' ? 'bg-blue-400 text-gray-900 border-blue-500' : 'bg-white dark:bg-[#242424] border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200'}`} title="Apaga os riscos feitos à mão">🧽 Apagar riscos</button>
-                                     <button type="button" onClick={() => { setLibMarkerMode(2); setLibDrawMode('off'); setLibToolboxOpen(false); }} className={`min-h-11 rounded-xl px-3 text-sm font-bold border ${libMarkerMode === 2 ? 'bg-blue-300 text-gray-900 border-blue-400' : 'bg-white dark:bg-[#242424] border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200'}`} title="Apague apenas o trecho de texto marcado">🧹 Apagar marca-texto</button>
-                                     <button type="button" onClick={() => { setLibMarkerMode(0); setLibDrawMode('off'); setLibToolboxOpen(false); }} className="min-h-11 rounded-xl px-3 text-sm font-bold border bg-white dark:bg-[#242424] border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200" title="Volta à leitura e rolagem normal">👆 Ler normalmente</button>
-                                     <button type="button" onClick={() => { clearLibraryHighlights(); }} className="min-h-11 rounded-xl px-3 text-sm font-bold border border-red-300/60 bg-red-500/10 text-red-500" title="Apaga todas as marcações de texto deste resumo">Limpar texto marcado</button>
-                                     <button type="button" onClick={clearLibraryDrawings} className="min-h-11 rounded-xl px-3 text-sm font-bold border border-red-300/60 bg-red-500/10 text-red-500 col-span-2 sm:col-span-1" title="Apaga todos os riscos à mão deste resumo">Limpar riscos</button>
-                                 </div>
-                                 <div>
-                                     <div className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Cor da caneta e do marca-texto</div>
-                                     <div className="grid grid-cols-4 sm:grid-cols-8 gap-2" role="group" aria-label="Cores das ferramentas de anotação">
-                                         {LIBRARY_MARKER_COLORS.map(({color,label}) => <button key={color} type="button" title={label} aria-label={`Selecionar cor ${label}`} aria-pressed={libMarkerColor === color} onClick={() => chooseLibraryMarkerColor(color)} className={`min-h-10 min-w-10 h-10 w-full rounded-xl flex items-center justify-center border ${libMarkerColor === color ? 'border-purple-500 ring-2 ring-purple-500' : 'border-gray-200 dark:border-gray-700'}`}><span className="h-6 w-6 rounded-full border border-black/10 dark:border-white/10" style={{backgroundColor:color}} /></button>)}
-                                     </div>
-                                 </div>
-                                 <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-400">A caneta livre permite escrever e riscar sobre a página. Para selecionar texto ou rolar normalmente, escolha “Ler normalmente”. As anotações são guardadas neste navegador/aparelho.</p>
-                             </div>}
                          </div>
                          {/* Ações de Status (Lido / Revisar) */}
                          <div className="px-4 py-4 flex gap-2 justify-center bg-white dark:bg-[#1A1A1A] border-b border-gray-100 dark:border-[#2a2a2a] shrink-0 z-20">
@@ -8744,6 +9060,39 @@
                         </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Leia materiais de apoio estruturados para fixação rápida.</p>
                         {resumosSyncMessage && <p role="status" aria-live="polite" className={`mt-2 text-xs font-semibold ${resumosSyncError ? 'text-red-500 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{resumosSyncMessage}</p>}
+                        <div className="mt-4">
+                            <div className="relative">
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"><Icons.Search /></span>
+                                <input
+                                    type="text"
+                                    inputMode="search"
+                                    autoComplete="off"
+                                    value={librarySearchQuery}
+                                    onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                                    placeholder="Buscar resumo por título ou conteúdo (ex: acalasia, trauma cervical)..."
+                                    aria-label="Buscar resumos por escrita"
+                                    data-biblioteca-search-input="1"
+                                    className="w-full h-12 pl-11 pr-20 rounded-2xl bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#333] text-gray-900 dark:text-white placeholder-gray-400 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-base sm:text-sm transition-colors"
+                                />
+                                {librarySearchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setLibrarySearchQuery('')}
+                                        aria-label="Limpar busca de resumos"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[36px] px-3 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors"
+                                    >
+                                        Limpar
+                                    </button>
+                                )}
+                            </div>
+                            {librarySearchTokens.length > 0 && (
+                                <div className="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite">
+                                    <span>
+                                        Mostrando <strong className="text-gray-800 dark:text-gray-200">{filteredLibraryEntries.length}</strong> de {ALL_LIBRARY.length} resumo(s) para “{librarySearchQuery.trim()}”
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
@@ -8755,13 +9104,13 @@
                             </div>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {ALL_LIBRARY.map((t, idx) => {
+                            {filteredLibraryEntries.map(({ item: t, originalIndex, matchedInTitle, snippet }) => {
                                 const status = bibliotecaStatus[t.id];
-                                const pal = THEME_PALETTE[idx % THEME_PALETTE.length];
+                                const pal = THEME_PALETTE[originalIndex % THEME_PALETTE.length];
                                 return (
                                     <button 
                                         key={t.id} 
-                                        onClick={() => setSelectedLibraryTema(t.id)}
+                                        onClick={() => { setLibToolboxOpen(false); setLibMarkerMode(0); setLibDrawMode('off'); setSelectedLibraryTema(t.id); }}
                                         className={`text-left p-6 rounded-[24px] border transition-all hover:scale-[1.02] flex flex-col justify-between ${isDark ? 'bg-[#1A1A1A] border-[#2A2A2A]' : 'bg-white shadow-sm border-gray-200'}`}
                                     >
                                         <div>
@@ -8769,6 +9118,11 @@
                                                 {t.emoji}
                                             </div>
                                             <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{t.title}</h3>
+                                            {!matchedInTitle && snippet && (
+                                                <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400 line-clamp-2">
+                                                    {snippet}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="mt-6 flex justify-end">
                                             {status === 'lido' && <span className="px-3 py-1 bg-green-500/10 text-green-500 font-bold text-xs uppercase rounded-full border border-green-500/20 flex items-center gap-1"><Icons.CheckCircle /> Lido</span>}
@@ -8779,6 +9133,20 @@
                                 );
                             })}
                         </div>
+                        {!resumosLoading && ALL_LIBRARY.length > 0 && filteredLibraryEntries.length === 0 && (
+                            <div className={`p-10 rounded-[24px] text-center border ${isDark ? 'bg-[#1A1A1A] border-[#2A2A2A]' : 'bg-white border-gray-200'}`}>
+                                <div className="text-4xl mb-4">🔍</div>
+                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Nenhum resumo encontrado</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Não encontramos resumos correspondentes a “{librarySearchQuery.trim()}”.</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setLibrarySearchQuery('')}
+                                    className="mt-5 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition-colors"
+                                >
+                                    Limpar busca
+                                </button>
+                            </div>
+                        )}
                         {!resumosLoading && ALL_LIBRARY.length === 0 && (
                             <div className={`p-10 rounded-[24px] text-center border ${isDark ? 'bg-[#1A1A1A] border-[#2A2A2A]' : 'bg-white border-gray-200'}`}>
                                 <div className="text-4xl mb-4">📚</div>
@@ -9338,6 +9706,7 @@
             const [mobileVideoTall, setMobileVideoTall] = useState(false);
             const [mobilePlayerTab, setMobilePlayerTab] = useState('controls'); // 'controls' | 'playlist'
             const trilhaRailRef = React.useRef(null);
+            const playerPlaylistRef = React.useRef(null);
             const dropdownWrapRef = React.useRef(null);
 
             useEffect(() => {
@@ -9361,6 +9730,41 @@
             const pdfMap = aulasProgress?.pdfs || {};
 
             const getVideoStatus = (videoId) => videoMap[String(videoId)]?.status || 'not_started';
+
+            const getPlaylistResumeTarget = (items) => {
+              const list = Array.isArray(items) ? items : [];
+              if (!list.length) return { video: null, index: -1, order: 0, hasProgress: false, isCompletedAll: false };
+              const hasProgress = list.some(v => getVideoStatus(v.id) !== 'not_started');
+              const lastId = String(aulasProgress?.lastOpened?.videoId || '');
+              const lastIdx = lastId ? list.findIndex(v => String(v.id) === lastId) : -1;
+              if (lastIdx >= 0 && getVideoStatus(list[lastIdx].id) === 'watching') {
+                return { video: list[lastIdx], index: lastIdx, order: lastIdx + 1, hasProgress, isCompletedAll: false };
+              }
+              let bestWatchingIdx = -1;
+              let bestWatchingStamp = -1;
+              list.forEach((v, idx) => {
+                if (getVideoStatus(v.id) !== 'watching') return;
+                const stamp = Date.parse(videoMap[String(v.id)]?.updatedAt || '') || 0;
+                if (bestWatchingIdx < 0 || stamp > bestWatchingStamp) {
+                  bestWatchingIdx = idx;
+                  bestWatchingStamp = stamp;
+                }
+              });
+              if (bestWatchingIdx >= 0) {
+                return { video: list[bestWatchingIdx], index: bestWatchingIdx, order: bestWatchingIdx + 1, hasProgress, isCompletedAll: false };
+              }
+              if (lastIdx >= 0 && getVideoStatus(list[lastIdx].id) === 'completed') {
+                const afterIdx = list.findIndex((v, idx) => idx > lastIdx && getVideoStatus(v.id) === 'not_started');
+                if (afterIdx >= 0) {
+                  return { video: list[afterIdx], index: afterIdx, order: afterIdx + 1, hasProgress, isCompletedAll: false };
+                }
+              }
+              const firstUnwatchedIdx = list.findIndex(v => getVideoStatus(v.id) === 'not_started');
+              if (firstUnwatchedIdx >= 0) {
+                return { video: list[firstUnwatchedIdx], index: firstUnwatchedIdx, order: firstUnwatchedIdx + 1, hasProgress, isCompletedAll: false };
+              }
+              return { video: list[0], index: 0, order: 1, hasProgress: true, isCompletedAll: true };
+            };
 
             const computeFolderStats = (folder) => {
               const vids = Array.isArray(folder?.videos) ? folder.videos : [];
@@ -9399,6 +9803,41 @@
               () => selectedSpecialty?.folders?.find(f => f.id === selectedFolderId) || null,
               [selectedSpecialty, selectedFolderId]
             );
+
+            const selectedFolderVideos = Array.isArray(selectedFolder?.videos) ? selectedFolder.videos : [];
+            const selectedFolderResume = getPlaylistResumeTarget(selectedFolderVideos);
+            const activeSessionVideoInFolder = activeVideoSession?.videos?.[activeVideoSession.index];
+            const spotlightVideoId = (
+              activeSessionVideoInFolder &&
+              selectedFolderVideos.some(v => String(v.id) === String(activeSessionVideoInFolder.id))
+            )
+              ? String(activeSessionVideoInFolder.id)
+              : (selectedFolderResume.video ? String(selectedFolderResume.video.id) : null);
+
+            useEffect(() => {
+              if (!selectedFolderId || displayMode !== 'trilha' || !spotlightVideoId) return undefined;
+              const raf = requestAnimationFrame(() => {
+                const rail = trilhaRailRef.current;
+                if (!rail) return;
+                const target = rail.querySelector('[data-trilha-spotlight="1"]');
+                if (!target) return;
+                const targetLeft = target.offsetLeft - Math.max(16, (rail.clientWidth - target.offsetWidth) / 2);
+                rail.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+              });
+              return () => cancelAnimationFrame(raf);
+            }, [selectedFolderId, displayMode, spotlightVideoId, statusFilter, themeFilter, lessonSearch, Boolean(activeVideoSession)]);
+
+            useEffect(() => {
+              if (!activeVideoSession) return undefined;
+              const raf = requestAnimationFrame(() => {
+                const container = playerPlaylistRef.current;
+                const currentEl = container?.querySelector('[data-player-playlist-current="1"]');
+                if (currentEl && typeof currentEl.scrollIntoView === 'function') {
+                  currentEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+              });
+              return () => cancelAnimationFrame(raf);
+            }, [activeVideoSession?.index, mobilePlayerTab, Boolean(activeVideoSession)]);
 
             useEffect(() => {
               try {
@@ -9455,7 +9894,6 @@
               setStatusFilter('all');
               setThemeFilter('all');
               setFolderDropdownOpen(false);
-              if (trilhaRailRef.current) trilhaRailRef.current.scrollLeft = 0;
             };
 
             const startPlaylist = (items, startIndex, sourceLabel) => {
@@ -9493,11 +9931,9 @@
               let idx = 0;
               if (videoId) {
                 const found = items.findIndex(v => String(v.id) === String(videoId));
-                if (found >= 0) idx = found;
+                idx = found >= 0 ? found : Math.max(0, getPlaylistResumeTarget(items).index);
               } else {
-                const watchingIdx = items.findIndex(v => getVideoStatus(v.id) === 'watching');
-                const unwatchedIdx = items.findIndex(v => getVideoStatus(v.id) === 'not_started');
-                idx = watchingIdx >= 0 ? watchingIdx : unwatchedIdx >= 0 ? unwatchedIdx : 0;
+                idx = Math.max(0, getPlaylistResumeTarget(items).index);
               }
               startPlaylist(items, idx, `${sp.name} · ${folder.name}`);
             };
@@ -9509,9 +9945,7 @@
                 buildFolderPlaylistItems(sp, f).forEach(v => allItems.push(v));
               });
               if (!allItems.length) return;
-              const watchingIdx = allItems.findIndex(v => getVideoStatus(v.id) === 'watching');
-              const unwatchedIdx = allItems.findIndex(v => getVideoStatus(v.id) === 'not_started');
-              const idx = watchingIdx >= 0 ? watchingIdx : unwatchedIdx >= 0 ? unwatchedIdx : 0;
+              const idx = Math.max(0, getPlaylistResumeTarget(allItems).index);
               startPlaylist(allItems, idx, `Playlist completa · ${sp.name}`);
             };
 
@@ -9881,7 +10315,7 @@
                                 <span className="text-amber-400">● {activeVideoSession.videos.filter(v => getVideoStatus(v.id) === 'watching').length}</span>
                               </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+                            <div ref={playerPlaylistRef} className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
                               {activeVideoSession.videos.map((vid, idx) => {
                                 const st = getVideoStatus(vid.id);
                                 const isCurrent = idx === activeVideoSession.index;
@@ -9889,6 +10323,7 @@
                                   <button
                                     key={`${vid.id}_${idx}`}
                                     type="button"
+                                    data-player-playlist-current={isCurrent ? '1' : '0'}
                                     onClick={() => jumpToSessionIndex(idx)}
                                     className={`w-full text-left p-3 rounded-xl border flex items-start gap-2.5 transition-all ${
                                       isCurrent
@@ -9970,7 +10405,6 @@
 
               const subThemes = Array.from(new Set(allFolderVideos.map(v => String(v.theme || '').trim()).filter(Boolean)));
               const fStats = computeFolderStats(selectedFolder);
-              const firstActiveId = (allFolderVideos.find(v => getVideoStatus(v.id) === 'watching') || allFolderVideos.find(v => getVideoStatus(v.id) === 'not_started'))?.id || null;
 
               const filteredVideos = allFolderVideos.filter(v => {
                 const st = getVideoStatus(v.id);
@@ -10081,11 +10515,37 @@
                       </button>
                       <button
                         type="button"
+                        data-playlist-continue-btn="1"
                         disabled={allFolderVideos.length === 0}
-                        onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder)}
-                        className="flex-1 sm:flex-none justify-center px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-md transition-colors"
+                        onClick={() => startFolderPlaylistFromVideo(
+                          selectedSpecialty,
+                          selectedFolder,
+                          selectedFolderResume.isCompletedAll ? allFolderVideos[0]?.id : selectedFolderResume.video?.id
+                        )}
+                        title={
+                          selectedFolderResume.hasProgress && !selectedFolderResume.isCompletedAll
+                            ? `Continuar de onde parou: Aula ${String(selectedFolderResume.order).padStart(2, '0')} — ${selectedFolderResume.video?.title || ''}`
+                            : selectedFolderResume.isCompletedAll
+                              ? 'Playlist concluída · clicar para rever desde a Aula 01'
+                              : `Assistir playlist (${allFolderVideos.length} aulas)`
+                        }
+                        className="flex-1 sm:flex-none justify-center px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg shadow-purple-600/25 transition-colors"
                       >
-                        <Icons.Play /> Assistir playlist ({allFolderVideos.length})
+                        {selectedFolderResume.hasProgress && !selectedFolderResume.isCompletedAll ? (
+                          <>
+                            <Icons.Play />
+                            <span>Continuar</span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-white/20 text-[11px] font-bold">
+                              Aula {String(selectedFolderResume.order).padStart(2, '0')}
+                            </span>
+                          </>
+                        ) : selectedFolderResume.isCompletedAll ? (
+                          <span>↻ Rever playlist</span>
+                        ) : (
+                          <>
+                            <Icons.Play /> Assistir playlist ({allFolderVideos.length})
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -10204,18 +10664,25 @@
                     <div className={`rounded-3xl p-3 sm:p-6 border ${isDark ? 'bg-[#161619] border-[#26262b]' : 'bg-white/90 border-gray-200 shadow-sm'}`}>
                       <div
                         ref={trilhaRailRef}
-                        className="flex items-stretch overflow-x-auto pb-3 scroll-smooth snap-x snap-mandatory"
+                        className="flex items-stretch overflow-x-auto pt-1.5 pb-3 scroll-smooth snap-x snap-mandatory"
                         style={{ scrollbarWidth: 'thin' }}
                       >
                         {filteredVideos.map((vid, idx) => {
                           const st = getVideoStatus(vid.id);
                           const isCompleted = st === 'completed';
                           const isWatching = st === 'watching';
-                          const isNextUp = !isCompleted && !isWatching && String(vid.id) === String(firstActiveId);
+                          const isSpotlight = Boolean(spotlightVideoId && String(vid.id) === String(spotlightVideoId));
+                          const hasFolderProgress = fStats.completed > 0 || fStats.watching > 0;
                           const realOrder = allFolderVideos.findIndex(v => String(v.id) === String(vid.id)) + 1;
+                          const prevCompleted = idx > 0 && getVideoStatus(filteredVideos[idx - 1].id) === 'completed';
 
                           return (
-                            <div key={`${vid.id}_${idx}`} className="w-[216px] sm:w-[244px] md:w-[252px] shrink-0 snap-start flex flex-col">
+                            <div
+                              key={`${vid.id}_${idx}`}
+                              data-trilha-video-id={String(vid.id)}
+                              data-trilha-spotlight={isSpotlight ? '1' : '0'}
+                              className="w-[216px] sm:w-[244px] md:w-[252px] shrink-0 snap-center flex flex-col"
+                            >
                               <div className="px-2 flex-1 flex flex-col">
                                 <div
                                   role="button"
@@ -10224,13 +10691,15 @@
                                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id); } }}
                                   title={vid.title}
                                   className={`flex-1 rounded-2xl p-4 border flex flex-col justify-between min-h-[168px] cursor-pointer transition-all hover:-translate-y-0.5 ${
-                                    isCompleted
-                                      ? (isDark ? 'bg-gradient-to-b from-emerald-950/35 to-[#1B1B1F] border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.12)]' : 'bg-emerald-50/70 border-emerald-400 shadow-sm')
-                                      : isWatching
-                                        ? (isDark ? 'bg-gradient-to-b from-amber-950/35 to-[#1B1B1F] border-amber-400/70 shadow-[0_0_20px_rgba(251,191,36,0.16)]' : 'bg-amber-50/80 border-amber-400 shadow-sm')
-                                        : isNextUp
-                                          ? (isDark ? 'bg-gradient-to-br from-emerald-950/25 via-[#1C1C21] to-[#19191D] border-white/60 shadow-lg' : 'bg-purple-50/50 border-purple-500 shadow-md')
-                                          : (isDark ? 'bg-[#1B1B1F] border-[#2C2C33] hover:border-purple-500/40' : 'bg-white border-gray-200 hover:border-purple-400 shadow-sm')
+                                    isSpotlight && isWatching
+                                      ? (isDark ? 'bg-gradient-to-b from-amber-950/50 to-[#1B1B1F] border-amber-400 ring-2 ring-amber-400 shadow-[0_0_26px_rgba(251,191,36,0.28)] scale-[1.015]' : 'bg-amber-50/95 border-amber-500 ring-2 ring-amber-400 shadow-lg scale-[1.015]')
+                                      : isSpotlight && !isCompleted
+                                        ? (isDark ? 'bg-gradient-to-br from-purple-950/45 via-[#1C1C23] to-[#19191D] border-purple-400 ring-2 ring-purple-500 shadow-[0_0_26px_rgba(168,85,247,0.32)] scale-[1.015]' : 'bg-purple-50/90 border-purple-500 ring-2 ring-purple-500 shadow-lg scale-[1.015]')
+                                        : isCompleted
+                                          ? (isDark ? 'bg-gradient-to-b from-emerald-950/35 to-[#1B1B1F] border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.12)]' : 'bg-emerald-50/70 border-emerald-400 shadow-sm')
+                                          : isWatching
+                                            ? (isDark ? 'bg-gradient-to-b from-amber-950/35 to-[#1B1B1F] border-amber-400/70 shadow-[0_0_20px_rgba(251,191,36,0.16)]' : 'bg-amber-50/80 border-amber-400 shadow-sm')
+                                            : (isDark ? 'bg-[#1B1B1F] border-[#2C2C33] hover:border-purple-500/40' : 'bg-white border-gray-200 hover:border-purple-400 shadow-sm')
                                   }`}
                                 >
                                   <div>
@@ -10249,7 +10718,15 @@
                                   </div>
 
                                   <div className="mt-4 pt-2 flex items-center justify-between gap-2">
-                                    {isCompleted ? (
+                                    {isSpotlight && isWatching ? (
+                                      <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-black bg-amber-400/25 text-amber-300 border border-amber-400/60">
+                                        ● Assistindo agora
+                                      </span>
+                                    ) : isSpotlight && !isCompleted ? (
+                                      <span className="inline-flex items-center gap-1 whitespace-nowrap px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-black bg-purple-600/25 text-purple-300 dark:text-purple-200 border border-purple-500/50">
+                                        {hasFolderProgress ? '▶ Continuar aqui' : '▶ Próxima aula'}
+                                      </span>
+                                    ) : isCompleted ? (
                                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/35">
                                         ✓ Concluído
                                       </span>
@@ -10286,35 +10763,38 @@
                                 </div>
                               </div>
 
-                              {/* Linha do Tempo conectada embaixo de cada card (Verde = Concluído, Amarelo = Assistindo, ▶ = Próxima) */}
+                              {/* Linha do Tempo conectada embaixo de cada card (Verde = Concluído, Amarelo/Roxo = Em evidência) */}
                               <div className="mt-4 relative flex items-center justify-center h-9">
-                                <div className={`absolute top-1/2 -translate-y-1/2 h-[2px] ${
-                                  filteredVideos.length === 1
-                                    ? 'hidden'
-                                    : idx === 0
-                                      ? 'left-1/2 right-0'
-                                      : idx === filteredVideos.length - 1
-                                        ? 'left-0 right-1/2'
-                                        : 'left-0 right-0'
-                                } ${isDark ? 'bg-[#2E2E35]' : 'bg-gray-200'}`} />
+                                {filteredVideos.length > 1 && idx > 0 && (
+                                  <div className={`absolute top-1/2 -translate-y-1/2 left-0 right-1/2 h-[2px] ${
+                                    prevCompleted ? 'bg-emerald-500' : (isDark ? 'bg-[#2E2E35]' : 'bg-gray-200')
+                                  }`} />
+                                )}
+                                {filteredVideos.length > 1 && idx < filteredVideos.length - 1 && (
+                                  <div className={`absolute top-1/2 -translate-y-1/2 left-1/2 right-0 h-[2px] ${
+                                    isCompleted ? 'bg-emerald-500' : (isDark ? 'bg-[#2E2E35]' : 'bg-gray-200')
+                                  }`} />
+                                )}
 
                                 <button
                                   type="button"
                                   onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id)}
                                   title={`Assistir: ${vid.title}`}
                                   className={`relative z-10 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${
-                                    isCompleted
-                                      ? 'w-7 h-7 bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.5)]'
-                                      : isWatching
-                                        ? 'w-7 h-7 bg-amber-400 text-amber-950 shadow-[0_0_12px_rgba(251,191,36,0.55)]'
-                                        : isNextUp
-                                          ? (isDark ? 'w-8 h-8 bg-white text-black shadow-lg' : 'w-8 h-8 bg-purple-600 text-white shadow-md')
-                                          : (isDark ? 'w-5 h-5 bg-[#1B1B1F] border-2 border-[#3C3C45] text-gray-500' : 'w-5 h-5 bg-white border-2 border-gray-300 text-gray-400')
+                                    isSpotlight && isWatching
+                                      ? 'w-8 h-8 bg-amber-400 text-amber-950 shadow-[0_0_14px_rgba(251,191,36,0.6)] ring-4 ring-amber-400/30'
+                                      : isSpotlight && !isCompleted
+                                        ? 'w-8 h-8 bg-purple-600 text-white shadow-[0_0_14px_rgba(168,85,247,0.55)] ring-4 ring-purple-500/30'
+                                        : isCompleted
+                                          ? 'w-7 h-7 bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.5)]'
+                                          : isWatching
+                                            ? 'w-7 h-7 bg-amber-400 text-amber-950 shadow-[0_0_12px_rgba(251,191,36,0.55)]'
+                                            : (isDark ? 'w-5 h-5 bg-[#1B1B1F] border-2 border-[#3C3C45] text-gray-500' : 'w-5 h-5 bg-white border-2 border-gray-300 text-gray-400')
                                   }`}
                                 >
                                   {isCompleted ? (
                                     <span className="text-xs font-black">✓</span>
-                                  ) : (isWatching || isNextUp) ? (
+                                  ) : (isWatching || isSpotlight) ? (
                                     <span className="text-[10px] font-black pl-0.5">▶</span>
                                   ) : (
                                     <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -10361,12 +10841,21 @@
                           const st = getVideoStatus(vid.id);
                           const isCompleted = st === 'completed';
                           const isWatching = st === 'watching';
+                          const isSpotlight = Boolean(spotlightVideoId && String(vid.id) === String(spotlightVideoId));
+                          const hasFolderProgress = fStats.completed > 0 || fStats.watching > 0;
                           const realOrder = allFolderVideos.findIndex(v => String(v.id) === String(vid.id)) + 1;
                           return (
                             <div
                               key={`${vid.id}_${idx}`}
+                              data-lista-spotlight={isSpotlight ? '1' : '0'}
                               onClick={() => startFolderPlaylistFromVideo(selectedSpecialty, selectedFolder, vid.id)}
-                              className={`px-3 sm:px-5 py-3.5 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer transition-colors ${isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-purple-50/40'}`}
+                              className={`px-3 sm:px-5 py-3.5 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer transition-colors ${
+                                isSpotlight && isWatching
+                                  ? 'border-l-4 border-l-amber-400 bg-amber-400/5'
+                                  : isSpotlight && !isCompleted
+                                    ? 'border-l-4 border-l-purple-500 bg-purple-500/5'
+                                    : (isDark ? 'hover:bg-white/[0.04]' : 'hover:bg-purple-50/40')
+                              }`}
                             >
                               <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
                                 <span className={`w-8 h-8 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
@@ -10374,9 +10863,11 @@
                                     ? 'bg-emerald-500 text-white'
                                     : isWatching
                                       ? 'bg-amber-400 text-amber-950'
-                                      : (isDark ? 'bg-[#26262c] text-gray-300' : 'bg-gray-100 text-gray-700')
+                                      : isSpotlight
+                                        ? 'bg-purple-600 text-white'
+                                        : (isDark ? 'bg-[#26262c] text-gray-300' : 'bg-gray-100 text-gray-700')
                                 }`}>
-                                  {isCompleted ? '✓' : isWatching ? '▶' : String(realOrder).padStart(2, '0')}
+                                  {isCompleted ? '✓' : (isWatching || isSpotlight) ? '▶' : String(realOrder).padStart(2, '0')}
                                 </span>
                                 <div className="min-w-0 flex-1">
                                   <div className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white line-clamp-2 sm:truncate">{vid.title}</div>
@@ -10386,13 +10877,17 @@
 
                               <div className="flex items-center gap-2 shrink-0">
                                 <span className={`hidden sm:inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                                  isCompleted
-                                    ? 'bg-emerald-500/15 text-emerald-400'
-                                    : isWatching
-                                      ? 'bg-amber-400/20 text-amber-400'
-                                      : 'text-gray-400'
+                                  isSpotlight && isWatching
+                                    ? 'bg-amber-400/20 text-amber-400'
+                                    : isSpotlight && !isCompleted
+                                      ? 'bg-purple-500/15 text-purple-400'
+                                      : isCompleted
+                                        ? 'bg-emerald-500/15 text-emerald-400'
+                                        : isWatching
+                                          ? 'bg-amber-400/20 text-amber-400'
+                                          : 'text-gray-400'
                                 }`}>
-                                  {isCompleted ? 'Concluído' : isWatching ? 'Assistindo' : 'Não iniciado'}
+                                  {isCompleted ? 'Concluído' : isWatching ? 'Assistindo' : isSpotlight ? (hasFolderProgress ? 'Continuar aqui' : 'Próxima aula') : 'Não iniciado'}
                                 </span>
                                 <button
                                   type="button"
@@ -10490,6 +10985,8 @@
             // ===============================================================
             if (selectedSpecialty) {
               const spStats = computeSpecialtyStats(selectedSpecialty);
+              const spAllVideos = (selectedSpecialty.folders || []).flatMap(f => f.videos || []);
+              const spResume = getPlaylistResumeTarget(spAllVideos);
               const q = folderSearch.trim().toLowerCase();
               const filteredFolders = (selectedSpecialty.folders || []).filter(f => !q || f.name.toLowerCase().includes(q));
 
@@ -10523,7 +11020,13 @@
                       onClick={() => startSpecialtyPlaylist(selectedSpecialty)}
                       className="w-full sm:w-auto justify-center px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-md transition-colors shrink-0"
                     >
-                      <Icons.Play /> Assistir playlist completa ({spStats.total})
+                      {spResume.hasProgress && !spResume.isCompletedAll ? (
+                        <><Icons.Play /> Continuar ({spResume.order}/{spStats.total})</>
+                      ) : spResume.isCompletedAll ? (
+                        <span>↻ Rever playlist completa</span>
+                      ) : (
+                        <><Icons.Play /> Assistir playlist completa ({spStats.total})</>
+                      )}
                     </button>
                   </div>
 
@@ -10584,7 +11087,7 @@
                                 onClick={(e) => { e.stopPropagation(); startFolderPlaylistFromVideo(selectedSpecialty, folder); }}
                                 className="text-purple-400 hover:text-purple-300 flex items-center gap-1"
                               >
-                                ▶ Playlist
+                                {(st.completed > 0 || st.watching > 0) && st.completed < st.total ? '▶ Continuar' : '▶ Playlist'}
                               </button>
                             </div>
                           </div>
