@@ -11,14 +11,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="HZ MED">
     <meta name="msapplication-TileColor" content="#080817">
-    <!-- HZ MED favicon: SVG data fallback + versioned PNG/ICO files -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='p' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23d05cff'/%3E%3Cstop offset='1' stop-color='%237b2cff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='60' height='60' rx='15' fill='%23070817' stroke='%239f70ff' stroke-width='2'/%3E%3Cpath d='M8 34h6l4-9 5 18 5-24 5 15h4' fill='none' stroke='%23b65cff' stroke-width='1.8'/%3E%3Ctext x='16' y='45' font-family='Arial,sans-serif' font-weight='900' font-size='31' fill='url(%23p)'%3EH%3C/text%3E%3Ctext x='35' y='45' font-family='Arial,sans-serif' font-weight='900' font-size='31' fill='%23ffffff'%3EZ%3C/text%3E%3Ccircle cx='49' cy='43' r='6.5' fill='%23070817' stroke='%23e8d8ff' stroke-width='1.7'/%3E%3Cpath d='m45.5 43 2.4 2.4 4.6-5' fill='none' stroke='%23e8d8ff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-    <link rel="icon" type="image/png" sizes="32x32" href="/hz-med-icon-32.png?v=20261023-4">
-    <link rel="icon" type="image/png" sizes="64x64" href="/hz-med-icon-64.png?v=20261023-4">
-    <link rel="icon" type="image/png" sizes="192x192" href="/hz-med-icon-192.png?v=20261023-4">
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=20261023-4">
-    <link rel="apple-touch-icon" sizes="180x180" href="/hz-med-icon-180.png?v=20261023-4">
-    <link rel="manifest" href="/manifest.webmanifest?v=20261023-4">
+    <!-- HZ MED logotipo oficial (aba do navegador, desktop e tela inicial iPhone/Android) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/hz-med-icon-32.png?v=20261126-logo">
+    <link rel="icon" type="image/png" sizes="64x64" href="/hz-med-icon-64.png?v=20261126-logo">
+    <link rel="icon" type="image/png" sizes="192x192" href="/hz-med-icon-192.png?v=20261126-logo">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=20261126-logo">
+    <link rel="apple-touch-icon" sizes="180x180" href="/hz-med-icon-180.png?v=20261126-logo">
+    <link rel="manifest" href="/manifest.webmanifest?v=20261126-logo">
     <title>HZ MED — Banco de Questões</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -84,7 +83,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
-        const { createRoot } = ReactDOM;
+        const { createRoot, createPortal } = ReactDOM;
 
 
         // Configuração do Desafio Diário. O modo automático conserva a regra padrão:
@@ -112,14 +111,66 @@
         }
 
         // API integrada do HZ MED: Code.gs único (Banco, Editor, Progresso e Biblioteca de Resumos).
-        // O mesmo endpoint é usado pelo Editor e pela sincronização do progresso.
+        // O mesmo endpoint é usado pelo Editor e pela sincronização do progresso (autenticado via token de sessão do servidor).
         const API_URL = 'https://script.google.com/macros/s/AKfycbywMShtxXw8y7Ld3pHEFntwo7-kg4MQ6sYPBzMt9BMsbpIp0dD_y9C5MTUKdBP6pP7YtQ/exec';
-        const BANK_TOKEN = 'a276e6f7346547f3a323c4a10267e483e6a18025ab904e33';
+        const PROGRESS_API_URL = API_URL;
 
-        // O Code.gs integrado atende Banco de Questões, progresso e Biblioteca no mesmo /exec.
-        // Manter um único endpoint evita que cada módulo grave em projetos Apps Script diferentes.
-        const PROGRESS_API_URL = API_URL; // O Code.gs integrado roteia o progresso pelas ações existentes.
-        const PROGRESS_TOKEN = BANK_TOKEN;
+        const HZ_AUTH_SESSION_TOKEN_KEY = 'hz_auth_session_token_v1';
+        let _hzInMemorySessionToken = '';
+        function getActiveSessionToken() {
+          if (_hzInMemorySessionToken) return _hzInMemorySessionToken;
+          try {
+            const stored = String(sessionStorage.getItem(HZ_AUTH_SESSION_TOKEN_KEY) || '').trim();
+            if (stored) _hzInMemorySessionToken = stored;
+            return stored;
+          } catch { return ''; }
+        }
+        function setActiveSessionToken(token) {
+          const clean = String(token || '').trim();
+          _hzInMemorySessionToken = clean;
+          try {
+            if (clean) sessionStorage.setItem(HZ_AUTH_SESSION_TOKEN_KEY, clean);
+            else sessionStorage.removeItem(HZ_AUTH_SESSION_TOKEN_KEY);
+          } catch {}
+        }
+        function clearActiveSessionToken() {
+          _hzInMemorySessionToken = '';
+          try {
+            sessionStorage.removeItem(HZ_AUTH_SESSION_TOKEN_KEY);
+            sessionStorage.removeItem('hfoqo_active_access');
+            sessionStorage.removeItem('hfoqo_main_logged_in');
+            sessionStorage.removeItem('hfoqo_database_logged_in');
+            sessionStorage.removeItem('hfoqo_logged_in');
+          } catch {}
+        }
+        function handleAuthRequiredResponse(data) {
+          if (data && data.authRequired === true) {
+            clearActiveSessionToken();
+            try { window.dispatchEvent(new Event('hz-auth-expired')); } catch {}
+          }
+        }
+        async function authApi(action, params = {}, timeout = 30000) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeout);
+          try {
+            const response = await fetch(API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ ...params, action }),
+              redirect: 'follow',
+              signal: controller.signal
+            });
+            const raw = await response.text();
+            let data;
+            try { data = JSON.parse(raw); } catch {
+              throw new Error('O servidor de autenticação não devolveu JSON válido.');
+            }
+            return data;
+          } catch (e) {
+            if (e?.name === 'AbortError') throw new Error('Tempo esgotado ao validar o acesso no servidor.');
+            throw e;
+          } finally { clearTimeout(timer); }
+        }
         const LIVE_DB = 'hfoqo_banco_real_v1';
         const LIVE_DB_VERSION = 1;
         const LIVE_STORE = 'exams';
@@ -270,13 +321,18 @@
         }
 
         async function liveApi(action, params = {}, timeout = 120000) {
+          const token = getActiveSessionToken();
+          if (!token) {
+            handleAuthRequiredResponse({ authRequired: true });
+            throw new Error('Sessão não autenticada.');
+          }
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeout);
           try {
             const response = await fetch(API_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({ ...params, action, token: BANK_TOKEN }),
+              body: JSON.stringify({ ...params, action, token }),
               redirect: 'follow',
               signal: controller.signal
             });
@@ -285,7 +341,10 @@
             try { data = JSON.parse(raw); } catch {
               throw new Error('O banco oficial não devolveu uma resposta JSON válida.');
             }
-            if (!response.ok || !data?.ok) throw new Error(data?.error || `Falha HTTP ${response.status} ao consultar o banco oficial.`);
+            if (!response.ok || !data?.ok) {
+              handleAuthRequiredResponse(data);
+              throw new Error(data?.error || `Falha HTTP ${response.status} ao consultar o banco oficial.`);
+            }
             return data;
           } catch (e) {
             if (e?.name === 'AbortError') throw new Error('A consulta ao banco oficial demorou demais.');
@@ -293,7 +352,7 @@
           } finally { clearTimeout(timer); }
         }
 
-        const CANONICAL_PROGRESS_USER_ID = 'hfoqo_login_4441';
+        const CANONICAL_PROGRESS_USER_ID = 'hz_user_principal';
 
         function getStableProgressUserId() {
           try {
@@ -321,8 +380,11 @@
           'hfoqo_biblioteca_resumos_cache_v1',
           'hfoqo_aulas_catalog_cache_v1',
           'hfoqo_aulas_player_mode_v1',
+          'hfoqo_aulas_player_mode_v2',
+          'hfoqo_aulas_player_mode_v3',
+          'hfoqo_aulas_playback_rate_v1',
           'hfoqo_legacy_progress_user_id',
-          'hfoqo_progress_migrated_to_4441'
+          'hfoqo_progress_migrated_v2'
         ]);
         function notifyHfoqoCloudSyncNeeded() {
           try { window.dispatchEvent(new Event('hfoqo-cloud-sync-needed')); } catch {}
@@ -534,20 +596,28 @@
         }
 
         async function progressApi(action, params = {}, timeout = 30000) {
+          const token = getActiveSessionToken();
+          if (!token) {
+            handleAuthRequiredResponse({ authRequired: true });
+            throw new Error('Sessão não autenticada.');
+          }
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeout);
           try {
             const response = await fetch(PROGRESS_API_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify({ ...params, action, token: PROGRESS_TOKEN }),
+              body: JSON.stringify({ ...params, action, token }),
               redirect: 'follow',
               signal: controller.signal
             });
             const raw = await response.text();
             let data;
             try { data = JSON.parse(raw); } catch { throw new Error('O servidor de progresso não devolveu JSON válido.'); }
-            if (!response.ok || !data?.ok) throw new Error(data?.error || `Falha HTTP ${response.status} no progresso.`);
+            if (!response.ok || !data?.ok) {
+              handleAuthRequiredResponse(data);
+              throw new Error(data?.error || `Falha HTTP ${response.status} no progresso.`);
+            }
             return data;
           } catch (e) {
             if (e?.name === 'AbortError') throw new Error('A sincronização do progresso demorou demais.');
@@ -2716,16 +2786,27 @@
             return map;
           }, [highlights]);
 
-          return (
-            <div className="fixed inset-0 z-[270000] bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" role="dialog" aria-modal="true">
-              <div className={`w-full max-w-6xl h-[100dvh] sm:h-[94dvh] rounded-none sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${isDark ? 'bg-[#141418] border-white/15 text-white' : 'bg-white border-gray-200 text-gray-900'}`}>
+          const modalContent = (
+            <div className="fixed inset-0 z-[270000] bg-black/90 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" role="dialog" aria-modal="true" data-hz-portal-modal="pdf">
+              <div
+                className={`w-full max-w-6xl h-[100dvh] sm:h-[94dvh] rounded-none sm:rounded-3xl border shadow-2xl flex flex-col overflow-hidden ${isDark ? 'bg-[#141418] border-white/15 text-white' : 'bg-white border-gray-200 text-gray-900'}`}
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+              >
                 {/* Cabeçalho */}
                 <div
-                  className={`px-3.5 sm:px-5 py-2.5 sm:py-3 border-b flex items-center justify-between gap-2 sm:gap-3 shrink-0 ${isDark ? 'border-white/10 bg-[#1a1a20]' : 'border-gray-200 bg-gray-50'}`}
-                  style={{ paddingTop: 'calc(0.65rem + var(--hfoqo-safe-top, 0px))' }}
+                  className={`px-3 sm:px-5 py-2.5 sm:py-3 border-b flex items-center justify-between gap-2 sm:gap-3 shrink-0 ${isDark ? 'border-white/10 bg-[#1a1a20]' : 'border-gray-200 bg-gray-50'}`}
+                  style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), var(--hfoqo-safe-top, 0px), 12px)' }}
                 >
-                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                    <span className="px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-black uppercase bg-rose-500/15 text-rose-500 border border-rose-500/30 shrink-0">PDF</span>
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Voltar"
+                      className={`sm:hidden w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isDark ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                    >
+                      <Icons.ChevronLeft />
+                    </button>
+                    <span className="hidden sm:inline-flex px-2.5 py-1 rounded-lg text-[11px] font-black uppercase bg-rose-500/15 text-rose-500 border border-rose-500/30 shrink-0">PDF</span>
                     <div className="min-w-0">
                       {pdf.subtitle && <div className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">{pdf.subtitle}</div>}
                       <div className="text-xs sm:text-base font-bold truncate">{pdf.title}</div>
@@ -2743,7 +2824,7 @@
                       href={`https://drive.google.com/file/d/${pdf.id}/view`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${isDark ? 'bg-white/10 hover:bg-white/15 text-gray-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-xl text-xs font-bold transition-colors ${isDark ? 'bg-white/10 hover:bg-white/15 text-gray-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
                     >
                       <Icons.ExternalLink /> <span className="hidden md:inline">Abrir no Drive</span><span className="md:hidden">Drive</span>
                     </a>
@@ -2751,7 +2832,7 @@
                       type="button"
                       onClick={onClose}
                       aria-label="Fechar PDF"
-                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors ${isDark ? 'bg-white/10 hover:bg-red-500/30 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
+                      className={`min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-colors ${isDark ? 'bg-white/10 hover:bg-red-500/30 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-800'}`}
                     >
                       <Icons.X />
                     </button>
@@ -2954,18 +3035,384 @@
               </div>
             </div>
           );
+          return typeof createPortal === 'function' ? createPortal(modalContent, document.body) : modalContent;
+        };
+
+        const formatVideoDuration = (sec) => {
+          const s = Math.max(0, Math.floor(Number(sec) || 0));
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const r = s % 60;
+          if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+          return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+        };
+
+        const NativeHzVideoPlayer = ({
+          video,
+          driveApiKey,
+          isPublicLink,
+          initialTime = 0,
+          playbackRate = 1,
+          onPlaybackRateChange,
+          onProgressTime,
+          onCompleted,
+          onEnablePublicLink,
+          enablingPublicLink,
+          onSwitchToDriveIframe
+        }) => {
+          const containerRef = React.useRef(null);
+          const videoRef = React.useRef(null);
+          const seekAppliedRef = React.useRef(false);
+          const lastSavedSecRef = React.useRef(-10);
+          const autoCompletedRef = React.useRef(false);
+
+          const [candidateIdx, setCandidateIdx] = useState(0);
+          const [retryNonce, setRetryNonce] = useState(0);
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [isBuffering, setIsBuffering] = useState(true);
+          const [currentTime, setCurrentTime] = useState(0);
+          const [duration, setDuration] = useState(0);
+          const [bufferedEnd, setBufferedEnd] = useState(0);
+          const [isMuted, setIsMuted] = useState(false);
+          const [volume, setVolume] = useState(1);
+          const [errorAllFailed, setErrorAllFailed] = useState(false);
+
+          const candidates = useMemo(() => {
+            const id = encodeURIComponent(String(video?.id || ''));
+            const list = [];
+            if (driveApiKey) {
+              list.push({
+                label: 'Drive API Stream',
+                url: `https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${encodeURIComponent(driveApiKey)}`
+              });
+            }
+            list.push({
+              label: 'Drive Direct 1080p',
+              url: `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`
+            });
+            list.push({
+              label: 'Drive Direct UC',
+              url: `https://drive.google.com/uc?export=download&id=${id}`
+            });
+            return list;
+          }, [video?.id, driveApiKey]);
+
+          useEffect(() => {
+            setCandidateIdx(0);
+            setIsPlaying(false);
+            setIsBuffering(true);
+            setCurrentTime(0);
+            setDuration(0);
+            setBufferedEnd(0);
+            setErrorAllFailed(false);
+            seekAppliedRef.current = false;
+            lastSavedSecRef.current = -10;
+            autoCompletedRef.current = false;
+          }, [video?.id, retryNonce]);
+
+          useEffect(() => {
+            if (videoRef.current) {
+              try { videoRef.current.playbackRate = playbackRate; } catch {}
+            }
+          }, [playbackRate, candidateIdx, retryNonce, video?.id]);
+
+          const activeCandidate = candidates[Math.min(candidateIdx, Math.max(0, candidates.length - 1))] || candidates[0];
+
+          const togglePlay = () => {
+            const el = videoRef.current;
+            if (!el) return;
+            if (el.paused || el.ended) {
+              const p = el.play();
+              if (p && typeof p.catch === 'function') p.catch(() => {});
+            } else {
+              el.pause();
+            }
+          };
+
+          const jumpSeconds = (delta) => {
+            const el = videoRef.current;
+            if (!el) return;
+            const dur = Number.isFinite(el.duration) ? el.duration : 0;
+            const next = Math.max(0, Math.min(dur > 0 ? dur : (el.currentTime + delta), el.currentTime + delta));
+            el.currentTime = next;
+            setCurrentTime(next);
+          };
+
+          const cyclePlaybackRate = () => {
+            const rates = [1, 1.25, 1.5, 1.75, 2];
+            const idx = rates.indexOf(playbackRate);
+            const next = rates[(idx + 1) % rates.length];
+            onPlaybackRateChange?.(next);
+          };
+
+          const toggleFullscreen = () => {
+            const el = videoRef.current;
+            const wrap = containerRef.current;
+            if (document.fullscreenElement) {
+              try { document.exitFullscreen?.(); } catch {}
+              return;
+            }
+            if (wrap && typeof wrap.requestFullscreen === 'function') {
+              const res = wrap.requestFullscreen();
+              if (res && typeof res.catch === 'function') {
+                res.catch(() => {
+                  if (el && typeof el.webkitEnterFullscreen === 'function') {
+                    try { el.webkitEnterFullscreen(); } catch {}
+                  }
+                });
+              }
+              return;
+            }
+            if (el && typeof el.webkitEnterFullscreen === 'function') {
+              try { el.webkitEnterFullscreen(); } catch {}
+            }
+          };
+
+          const pctPlayed = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+          const pctBuffered = duration > 0 ? Math.min(100, (bufferedEnd / duration) * 100) : 0;
+
+          if (errorAllFailed) {
+            return (
+              <div className="w-full h-full bg-[#0d0d12] flex flex-col overflow-y-auto overscroll-contain p-3 sm:p-6">
+                <div className="max-w-lg w-full mx-auto my-auto text-center space-y-2 sm:space-y-3">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/35 text-[10px] sm:text-[11px] font-black uppercase">
+                    Reprodução direta bloqueada pelo Drive
+                  </div>
+                  <h4 className="text-xs sm:text-base font-bold text-white leading-snug">
+                    {isPublicLink === false
+                      ? 'A pasta "HZ MED - Aulas" ainda está privada no Google Drive'
+                      : 'Este arquivo não respondeu no Player Próprio'}
+                  </h4>
+                  <p className="text-[11px] sm:text-xs text-gray-300 leading-snug sm:leading-relaxed">
+                    O <strong>Player HZ</strong> toca sem login ou cookies, mas precisa da pasta como <em>"Qualquer pessoa com o link (Leitor)"</em> (arquivos &gt;100 MB usam Chave de API no Configurar Plano).
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 pt-0.5">
+                    {typeof onEnablePublicLink === 'function' && (
+                      <button
+                        type="button"
+                        disabled={enablingPublicLink}
+                        onClick={async () => {
+                          const ok = await onEnablePublicLink();
+                          if (ok) {
+                            setRetryNonce(n => n + 1);
+                          }
+                        }}
+                        className="px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-[11px] sm:text-xs font-black shadow-lg transition-colors"
+                      >
+                        {enablingPublicLink ? 'Liberando pasta…' : '🔓 Liberar pasta no Drive agora'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRetryNonce(n => n + 1)}
+                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[11px] sm:text-xs font-bold transition-colors"
+                    >
+                      ↻ Tentar novamente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSwitchToDriveIframe}
+                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 text-[11px] sm:text-xs font-bold transition-colors"
+                    >
+                      Usar player do Drive
+                    </button>
+                    <a
+                      href={`https://drive.google.com/file/d/${video.id}/view`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 text-[11px] sm:text-xs font-bold transition-colors"
+                    >
+                      Abrir no Drive ↗
+                    </a>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div ref={containerRef} className="w-full h-full bg-black relative group select-none flex flex-col justify-between overflow-hidden">
+              <video
+                ref={videoRef}
+                key={`hz_${video.id}_${candidateIdx}_${retryNonce}`}
+                src={activeCandidate?.url || ''}
+                playsInline
+                webkit-playsinline="true"
+                preload="metadata"
+                onClick={togglePlay}
+                onLoadedMetadata={(e) => {
+                  const el = e.currentTarget;
+                  const dur = Number.isFinite(el.duration) ? el.duration : 0;
+                  setDuration(dur);
+                  setIsBuffering(false);
+                  try { el.playbackRate = playbackRate; } catch {}
+                  if (!seekAppliedRef.current && initialTime > 5 && dur > 15 && initialTime < dur - 8) {
+                    seekAppliedRef.current = true;
+                    try { el.currentTime = initialTime; setCurrentTime(initialTime); } catch {}
+                  }
+                }}
+                onPlay={() => { setIsPlaying(true); setIsBuffering(false); }}
+                onPause={() => setIsPlaying(false)}
+                onWaiting={() => setIsBuffering(true)}
+                onCanPlay={() => setIsBuffering(false)}
+                onTimeUpdate={(e) => {
+                  const el = e.currentTarget;
+                  const cur = Number(el.currentTime || 0);
+                  const dur = Number.isFinite(el.duration) ? el.duration : duration;
+                  setCurrentTime(cur);
+                  if (dur > 0) setDuration(dur);
+                  if (el.buffered && el.buffered.length > 0) {
+                    try { setBufferedEnd(el.buffered.end(el.buffered.length - 1)); } catch {}
+                  }
+                  if (Math.abs(cur - lastSavedSecRef.current) >= 5) {
+                    lastSavedSecRef.current = cur;
+                    onProgressTime?.(Math.floor(cur));
+                  }
+                  if (dur > 20 && !autoCompletedRef.current && (cur / dur) >= 0.96) {
+                    autoCompletedRef.current = true;
+                    onCompleted?.();
+                  }
+                }}
+                onEnded={() => {
+                  setIsPlaying(false);
+                  onProgressTime?.(0);
+                  if (!autoCompletedRef.current) {
+                    autoCompletedRef.current = true;
+                    onCompleted?.();
+                  }
+                }}
+                onError={() => {
+                  if (candidateIdx + 1 < candidates.length) {
+                    setCandidateIdx(idx => idx + 1);
+                  } else {
+                    setIsBuffering(false);
+                    setIsPlaying(false);
+                    setErrorAllFailed(true);
+                  }
+                }}
+                className="w-full h-full object-contain bg-black cursor-pointer"
+              />
+
+              {/* Play central ao pausar / Spinner durante buffering */}
+              {(!isPlaying || isBuffering) && (
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  aria-label={isPlaying ? 'Pausar aula' : 'Reproduzir aula'}
+                  className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-purple-600/90 hover:bg-purple-500 text-white shadow-2xl flex items-center justify-center transition-transform active:scale-95 z-10"
+                >
+                  {isBuffering ? (
+                    <span className="w-7 h-7 rounded-full border-4 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <span className="text-2xl pl-1">▶</span>
+                  )}
+                </button>
+              )}
+
+              {/* Barra inferior customizada do Player HZ */}
+              <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/75 to-transparent px-3 sm:px-4 pt-6 pb-2.5 space-y-2">
+                {/* Scrubber / Progresso */}
+                <div className="relative h-5 flex items-center">
+                  <div className="w-full h-1.5 rounded-full bg-white/20 overflow-hidden relative">
+                    <div className="absolute inset-y-0 left-0 bg-white/30" style={{ width: `${pctBuffered}%` }} />
+                    <div className="absolute inset-y-0 left-0 bg-purple-500" style={{ width: `${pctPlayed}%` }} />
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration > 0 ? duration : 100}
+                    step={0.5}
+                    value={Math.min(currentTime, duration > 0 ? duration : 100)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value || 0);
+                      setCurrentTime(v);
+                      if (videoRef.current) videoRef.current.currentTime = v;
+                    }}
+                    aria-label="Posição do vídeo"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
+
+                {/* Botões */}
+                <div className="flex items-center justify-between gap-2 text-white">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <button
+                      type="button"
+                      onClick={togglePlay}
+                      aria-label={isPlaying ? 'Pausar' : 'Reproduzir'}
+                      className="min-w-[38px] h-9 px-2.5 rounded-lg bg-white/15 hover:bg-purple-600 text-xs sm:text-sm font-black flex items-center justify-center transition-colors"
+                    >
+                      {isPlaying ? '⏸' : '▶'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => jumpSeconds(-10)}
+                      aria-label="Voltar 10 segundos"
+                      className="h-9 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold"
+                    >
+                      −10s
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => jumpSeconds(10)}
+                      aria-label="Avançar 10 segundos"
+                      className="h-9 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold"
+                    >
+                      +10s
+                    </button>
+                    <span className="text-[11px] font-mono text-gray-200 ml-1 whitespace-nowrap">
+                      {formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={cyclePlaybackRate}
+                      className="h-9 px-2.5 rounded-lg bg-white/10 hover:bg-purple-600 text-xs font-black transition-colors"
+                      title="Velocidade de reprodução"
+                    >
+                      {playbackRate}x
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = videoRef.current;
+                        if (!el) return;
+                        const nextMuted = !isMuted;
+                        el.muted = nextMuted;
+                        setIsMuted(nextMuted);
+                      }}
+                      aria-label={isMuted ? 'Ativar som' : 'Silenciar'}
+                      className="hidden sm:inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white/10 hover:bg-white/20 text-xs"
+                    >
+                      {isMuted || volume === 0 ? '🔇' : '🔊'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleFullscreen}
+                      aria-label="Tela cheia"
+                      className="h-9 px-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold"
+                      title="Tela cheia"
+                    >
+                      ⛶
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
         };
 
         const App = () => {
-          // Cada área mantém uma autenticação de sessão própria; o acesso ativo também é isolado.
-          const [activeAccess, setActiveAccess] = useState(() => {
+          // Autenticação verificada diretamente no servidor (sem confiar apenas em flags locais nem expor senha no frontend).
+          const [activeAccess, setActiveAccess] = useState('');
+          const [authChecking, setAuthChecking] = useState(() => {
             try {
-              const active = sessionStorage.getItem('hfoqo_active_access');
-              if (active === 'main' && sessionStorage.getItem('hfoqo_main_logged_in') === '1') return 'main';
-              if (active === 'database' && sessionStorage.getItem('hfoqo_database_logged_in') === '1') return 'database';
-            } catch {}
-            return '';
+              return Boolean(sessionStorage.getItem(HZ_AUTH_SESSION_TOKEN_KEY) && sessionStorage.getItem('hfoqo_active_access'));
+            } catch { return false; }
           });
+          const [authSubmitting, setAuthSubmitting] = useState(false);
           const isLoggedIn = Boolean(activeAccess);
           const [loginPassword, setLoginPassword] = useState('');
           const [loginError, setLoginError] = useState('');
@@ -2975,7 +3422,57 @@
 
           // Configurações globais
           const [isDark, setIsDark] = useState(true);
-          const [currentView, setCurrentView] = useState(() => activeAccess === 'database' ? 'banco' : 'painel'); // painel, trilha, limbo, desafio, question, imersao, metricas
+          const [currentView, setCurrentView] = useState('painel'); // painel, trilha, limbo, desafio, question, aulas, metricas
+
+          useEffect(() => {
+            let cancelled = false;
+            const verifyExistingSession = async () => {
+              let savedAccess = '';
+              let token = '';
+              try {
+                savedAccess = String(sessionStorage.getItem('hfoqo_active_access') || '').trim();
+                token = getActiveSessionToken();
+              } catch {}
+              if (!token || !['main', 'database'].includes(savedAccess)) {
+                clearActiveSessionToken();
+                if (!cancelled) { setActiveAccess(''); setAuthChecking(false); }
+                return;
+              }
+              try {
+                const res = await authApi('authVerify', { token }, 20000);
+                if (cancelled) return;
+                if (res?.ok && res?.valid) {
+                  setActiveAccess(savedAccess);
+                  setCurrentView(savedAccess === 'database' ? 'banco' : 'painel');
+                } else {
+                  clearActiveSessionToken();
+                  setActiveAccess('');
+                }
+              } catch {
+                clearActiveSessionToken();
+                if (!cancelled) setActiveAccess('');
+              } finally {
+                if (!cancelled) setAuthChecking(false);
+              }
+            };
+            verifyExistingSession();
+            return () => { cancelled = true; };
+          }, []);
+
+          useEffect(() => {
+            const onAuthExpired = () => {
+              clearActiveSessionToken();
+              setCloudSyncReady(false);
+              setActiveAccess('');
+              setAllLiveQuestions([]);
+              setQuestionQueue([]);
+              setQuestionIndex(0);
+              setLoginError('Sessão expirada ou encerrada. Digite sua senha novamente.');
+              setDatabaseLoginError('Sessão expirada ou encerrada. Digite sua senha novamente.');
+            };
+            window.addEventListener('hz-auth-expired', onAuthExpired);
+            return () => window.removeEventListener('hz-auth-expired', onAuthExpired);
+          }, []);
           const [showFocusPanel, setShowFocusPanel] = useState(false);
           
           // Datas e Metas
@@ -3068,6 +3565,8 @@
           // Sincroniza somente os resumos da planilha: não mexe em questões, progresso,
           // métricas, status de leitura nem marcações locais da Biblioteca.
           const syncBibliotecaResumos = async ({ manual = false } = {}) => {
+            const token = getActiveSessionToken();
+            if (!token) return false;
             if (resumosSyncInFlightRef.current) {
               if (manual) {
                 setResumosSyncError(false);
@@ -3089,14 +3588,20 @@
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 20000);
             try {
-              const separator = RESUMOS_API_URL.includes('?') ? '&' : '?';
-              const response = await fetch(`${RESUMOS_API_URL}${separator}sync=${Date.now()}`, {
-                method: 'GET', cache: 'no-store', redirect: 'follow', signal: controller.signal,
-                headers: { 'Accept': 'application/json' }
+              const response = await fetch(RESUMOS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Accept': 'application/json' },
+                body: JSON.stringify({ action: 'listResumos', token }),
+                cache: 'no-store',
+                redirect: 'follow',
+                signal: controller.signal
               });
               if (!response.ok) throw new Error(`Resposta HTTP ${response.status}.`);
               const data = await response.json();
-              if (data?.ok === false) throw new Error(data.error || 'O Apps Script recusou a sincronização.');
+              if (data?.ok === false) {
+                handleAuthRequiredResponse(data);
+                throw new Error(data.error || 'O Apps Script recusou a sincronização.');
+              }
               const sourceList = Array.isArray(data) ? data
                 : Array.isArray(data?.resumos) ? data.resumos
                 : Array.isArray(data?.items) ? data.items
@@ -3149,6 +3654,7 @@
                 startedAt: String(item.startedAt || item.updatedAt || ''),
                 updatedAt: String(item.updatedAt || item.completedAt || item.startedAt || ''),
                 completedAt: status === 'completed' ? String(item.completedAt || item.updatedAt || '') : '',
+                lastTime: Math.max(0, Math.floor(Number(item.lastTime) || 0)),
                 title: String(item.title || ''),
                 folderId: String(item.folderId || ''),
                 folderName: String(item.folderName || ''),
@@ -3243,6 +3749,8 @@
           const aulasLoginSyncedRef = React.useRef(false);
           const [showAulasFolderConfig, setShowAulasFolderConfig] = useState(false);
           const [aulasFolderInput, setAulasFolderInput] = useState('');
+          const [aulasApiKeyInput, setAulasApiKeyInput] = useState('');
+          const [enablingPublicLink, setEnablingPublicLink] = useState(false);
           const [aulasProgress, setAulasProgress] = useState(() => {
             try { return normalizeAulasProgress(JSON.parse(localStorage.getItem(AULAS_PROGRESS_KEY) || '{}')); }
             catch { return normalizeAulasProgress({}); }
@@ -3353,6 +3861,7 @@
                   startedAt: existing?.startedAt || now,
                   updatedAt: now,
                   completedAt: nextStatus === 'completed' ? (existing?.completedAt || now) : '',
+                  lastTime: Math.max(0, Math.floor(Number(existing?.lastTime) || 0)),
                   title: String(video.title || existing?.title || ''),
                   folderId: String(contextMeta.folderId || existing?.folderId || ''),
                   folderName: String(contextMeta.folderName || existing?.folderName || ''),
@@ -3374,6 +3883,89 @@
                 }
               };
             });
+          };
+
+          const updateVideoTimestamp = (videoId, seconds) => {
+            const vid = String(videoId || '').trim();
+            const sec = Math.max(0, Math.floor(Number(seconds) || 0));
+            if (!vid) return;
+            setAulasProgress(prev => {
+              const base = normalizeAulasProgress(prev);
+              const existing = base.videos[vid];
+              if (!existing) return prev;
+              if (Math.abs((existing.lastTime || 0) - sec) < 4 && sec !== 0) return prev;
+              return {
+                ...base,
+                videos: {
+                  ...base.videos,
+                  [vid]: {
+                    ...existing,
+                    lastTime: sec
+                  }
+                }
+              };
+            });
+          };
+
+          const enableAulasPublicAccess = async () => {
+            if (enablingPublicLink) return false;
+            setEnablingPublicLink(true);
+            setAulasSyncError(false);
+            setAulasSyncMessage('Liberando leitura via link da pasta no Google Drive…');
+            try {
+              const res = await liveApi('enableAulasPublicLink', {}, 45000);
+              if (!res || res.ok === false) {
+                throw new Error(res?.error || 'Não foi possível liberar o compartilhamento via link.');
+              }
+              setAulasCatalog(prev => {
+                const updated = { ...(prev || {}), isPublicLink: true, folderId: res.folderId || prev?.folderId, folderName: res.folderName || prev?.folderName, folderUrl: res.folderUrl || prev?.folderUrl };
+                try {
+                  localStorage.setItem(AULAS_CACHE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), catalog: updated }));
+                } catch {}
+                return updated;
+              });
+              setAulasSyncError(false);
+              setAulasSyncMessage(res.message || 'Pasta liberada para leitura via link (Player Próprio ativo).');
+              return true;
+            } catch (err) {
+              setAulasSyncError(true);
+              setAulasSyncMessage(err?.message || 'Erro ao liberar compartilhamento da pasta.');
+              return false;
+            } finally {
+              setEnablingPublicLink(false);
+            }
+          };
+
+          const saveAulasDriveApiKey = async (apiKey) => {
+            const cleanKey = String(apiKey || '').trim();
+            if (aulasSyncInFlightRef.current) return false;
+            aulasSyncInFlightRef.current = true;
+            setAulasSyncing(true);
+            setAulasSyncError(false);
+            setAulasSyncMessage(cleanKey ? 'Salvando Chave de API do Google Drive…' : 'Removendo Chave de API do Google Drive…');
+            try {
+              const res = await liveApi('setAulasDriveApiKey', { apiKey: cleanKey }, 45000);
+              if (!res || res.ok === false) {
+                throw new Error(res?.error || 'Falha ao salvar a Chave de API.');
+              }
+              setAulasCatalog(prev => {
+                const updated = { ...(prev || {}), driveApiKey: String(res.driveApiKey || cleanKey || '') };
+                try {
+                  localStorage.setItem(AULAS_CACHE_KEY, JSON.stringify({ savedAt: new Date().toISOString(), catalog: updated }));
+                } catch {}
+                return updated;
+              });
+              setAulasSyncError(false);
+              setAulasSyncMessage(cleanKey ? 'Chave de API salva (suporte completo a vídeos grandes no Player HZ).' : 'Chave de API removida.');
+              return true;
+            } catch (err) {
+              setAulasSyncError(true);
+              setAulasSyncMessage(err?.message || 'Erro ao salvar Chave de API.');
+              return false;
+            } finally {
+              aulasSyncInFlightRef.current = false;
+              setAulasSyncing(false);
+            }
           };
 
           const markPdfOpened = (pdf) => {
@@ -3524,42 +4116,74 @@
             setLimboSelections(prev => ({ ...prev, [String(qid)]: String(selectedOpt) }));
           };
 
-          const handleLogin = (e) => {
+          const handleLogin = async (e) => {
             e?.preventDefault?.();
-            if (String(loginPassword).trim() === '4441') {
-              try {
-                sessionStorage.setItem('hfoqo_main_logged_in', '1');
-                sessionStorage.setItem('hfoqo_active_access', 'main');
-                sessionStorage.removeItem('hfoqo_logged_in');
-              } catch {}
-              setActiveAccess('main');
-              setLoginError('');
-              setLoginPassword('');
-              setDatabaseGateOpen(false);
-              setQuestionQueue([]);
-              setQuestionIndex(0);
-              setCurrentView('painel');
-            } else {
-              setLoginError('Senha incorreta.');
+            if (authSubmitting) return;
+            const pwd = String(loginPassword || '').trim();
+            if (!pwd) {
+              setLoginError('Digite a senha de acesso.');
+              return;
+            }
+            setAuthSubmitting(true);
+            setLoginError('');
+            try {
+              const res = await authApi('authLogin', { scope: 'main', password: pwd }, 30000);
+              if (res?.ok && res?.sessionToken) {
+                setActiveSessionToken(res.sessionToken);
+                try {
+                  sessionStorage.setItem('hfoqo_active_access', 'main');
+                  sessionStorage.removeItem('hfoqo_main_logged_in');
+                  sessionStorage.removeItem('hfoqo_logged_in');
+                } catch {}
+                setActiveAccess('main');
+                setLoginError('');
+                setLoginPassword('');
+                setDatabaseGateOpen(false);
+                setQuestionQueue([]);
+                setQuestionIndex(0);
+                setCurrentView('painel');
+              } else {
+                setLoginError(res?.error || 'Senha incorreta.');
+              }
+            } catch (err) {
+              setLoginError(err?.message || 'Não foi possível validar a senha no servidor.');
+            } finally {
+              setAuthSubmitting(false);
             }
           };
 
-          // O acesso ao Banco de Dados possui chave de sessão própria e não libera o BQHZ.
-          const handleDatabaseLogin = (e) => {
+          // O acesso ao Banco de Dados valida a sessão diretamente no servidor.
+          const handleDatabaseLogin = async (e) => {
             e?.preventDefault?.();
-            if (String(databasePassword).trim() === '4441') {
-              try {
-                sessionStorage.setItem('hfoqo_database_logged_in', '1');
-                sessionStorage.setItem('hfoqo_active_access', 'database');
-                sessionStorage.removeItem('hfoqo_logged_in');
-              } catch {}
-              setActiveAccess('database');
-              setDatabaseLoginError('');
-              setDatabasePassword('');
-              setDatabaseGateOpen(false);
-              setCurrentView('banco');
-            } else {
-              setDatabaseLoginError('Senha incorreta.');
+            if (authSubmitting) return;
+            const pwd = String(databasePassword || '').trim();
+            if (!pwd) {
+              setDatabaseLoginError('Digite a senha de acesso.');
+              return;
+            }
+            setAuthSubmitting(true);
+            setDatabaseLoginError('');
+            try {
+              const res = await authApi('authLogin', { scope: 'database', password: pwd }, 30000);
+              if (res?.ok && res?.sessionToken) {
+                setActiveSessionToken(res.sessionToken);
+                try {
+                  sessionStorage.setItem('hfoqo_active_access', 'database');
+                  sessionStorage.removeItem('hfoqo_database_logged_in');
+                  sessionStorage.removeItem('hfoqo_logged_in');
+                } catch {}
+                setActiveAccess('database');
+                setDatabaseLoginError('');
+                setDatabasePassword('');
+                setDatabaseGateOpen(false);
+                setCurrentView('banco');
+              } else {
+                setDatabaseLoginError(res?.error || 'Senha incorreta.');
+              }
+            } catch (err) {
+              setDatabaseLoginError(err?.message || 'Não foi possível validar a senha no servidor.');
+            } finally {
+              setAuthSubmitting(false);
             }
           };
 
@@ -3603,13 +4227,14 @@
               clearTimeout(cloudSyncTimerRef.current);
               cloudSyncTimerRef.current = null;
             }
-            try {
-              sessionStorage.removeItem(isDatabaseArea ? 'hfoqo_database_logged_in' : 'hfoqo_main_logged_in');
-              if (sessionStorage.getItem('hfoqo_active_access') === area) sessionStorage.removeItem('hfoqo_active_access');
-              sessionStorage.removeItem('hfoqo_logged_in');
-            } catch {}
+            const currentToken = getActiveSessionToken();
+            if (currentToken) {
+              authApi('authLogout', { token: currentToken }, 10000).catch(() => {});
+            }
+            clearActiveSessionToken();
             setCloudSyncReady(false);
             setActiveAccess('');
+            setAllLiveQuestions([]);
             setShowSettings(false);
             setShowFocusPanel(false);
             setDatabaseGateOpen(false);
@@ -3851,19 +4476,27 @@
           };
 
           const callCloudSyncApi = async (action, params = {}, timeout = 45000) => {
+            const token = getActiveSessionToken();
+            if (!token) {
+              handleAuthRequiredResponse({ authRequired: true });
+              throw new Error('Sessão não autenticada.');
+            }
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeout);
             try {
               const response = await fetch(PROGRESS_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8', 'Accept': 'application/json' },
-                body: JSON.stringify({ ...params, action, token: PROGRESS_TOKEN }),
+                body: JSON.stringify({ ...params, action, token }),
                 redirect: 'follow', signal: controller.signal
               });
               const raw = await response.text();
               let result;
               try { result = JSON.parse(raw); } catch { throw new Error('O backend não retornou JSON válido para a sincronização.'); }
-              if (!response.ok || !result?.ok) throw new Error(result?.error || `Falha HTTP ${response.status} na sincronização.`);
+              if (!response.ok || !result?.ok) {
+                handleAuthRequiredResponse(result);
+                throw new Error(result?.error || `Falha HTTP ${response.status} na sincronização.`);
+              }
               return result;
             } catch (e) {
               if (e?.name === 'AbortError') throw new Error('Tempo esgotado ao sincronizar os dados entre dispositivos.');
@@ -3953,11 +4586,12 @@
           // Atualiza automaticamente sempre que a Biblioteca é aberta. O cache exibe
           // o conteúdo imediatamente enquanto os resumos mais recentes chegam em segundo plano.
           useEffect(() => {
-            if (currentView !== 'biblioteca') return;
+            if (!isLoggedIn || currentView !== 'biblioteca') return;
             syncBibliotecaResumos({ manual: false });
-          }, [currentView]);
+          }, [isLoggedIn, currentView]);
 
           useEffect(() => {
+            if (!isLoggedIn) return undefined;
             let cancelled = false;
             const run = async () => {
               const publishAvailableExams = async (activeMetas, localById, downloadedById, persist = false) => {
@@ -4153,7 +4787,7 @@
             };
             run();
             return () => { cancelled = true; };
-          }, [liveSyncRevision]);
+          }, [isLoggedIn, liveSyncRevision]);
 
           // Migração segura dos históricos antigos: questões já enviadas ao Limbo contam como feitas,
           // mas continuam na lista de revisão; no Desafio continuam disponíveis para reciclagem futura.
@@ -4426,6 +5060,7 @@
           };
 
           useEffect(() => {
+            if (!isLoggedIn) return undefined;
             if (!legacyProgressUserId || legacyProgressUserId === progressUserId) {
               setProgressIdentityReady(true);
               return;
@@ -4433,7 +5068,7 @@
             let cancelled = false;
             (async () => {
               try {
-                const migratedFlag = localStorage.getItem('hfoqo_progress_migrated_to_4441');
+                const migratedFlag = localStorage.getItem('hfoqo_progress_migrated_v2');
                 if (migratedFlag === '1') { setProgressIdentityReady(true); return; }
               } catch {}
               try {
@@ -4444,7 +5079,7 @@
                 if (cancelled) return;
                 if (result?.ok) {
                   try {
-                    localStorage.setItem('hfoqo_progress_migrated_to_4441', '1');
+                    localStorage.setItem('hfoqo_progress_migrated_v2', '1');
                     localStorage.setItem('hfoqo_progress_user_id', progressUserId);
                     localStorage.removeItem('hfoqo_legacy_progress_user_id');
                   } catch {}
@@ -4456,10 +5091,10 @@
               }
             })();
             return () => { cancelled = true; };
-          }, [legacyProgressUserId, progressUserId]);
+          }, [isLoggedIn, legacyProgressUserId, progressUserId]);
 
           useEffect(() => {
-            if (!progressIdentityReady) return;
+            if (!isLoggedIn || !progressIdentityReady) return;
             if (progressHydrated || !progressUserId) return;
             let cancelled = false;
             (async () => {
@@ -4523,7 +5158,7 @@
               }
             })();
             return () => { cancelled = true; };
-          }, [progressUserId, progressHydrated, progressIdentityReady]);
+          }, [isLoggedIn, progressUserId, progressHydrated, progressIdentityReady]);
 
           useEffect(() => {
             if (!isLoggedIn || !progressIdentityReady || !progressUserId) return;
@@ -5392,6 +6027,11 @@
           const Header = () => (
             <header className="app-header flex items-center justify-between gap-2 px-3 py-3 sm:p-4 bg-transparent border-b border-gray-200 dark:border-[#222] transition-colors relative z-10" style={{paddingTop:'calc(1rem + var(--hfoqo-safe-top, 0px))'}}>
               <div className="app-header-brand flex items-center gap-2 min-w-0 flex-1" onClick={() => setCurrentView(activeAccess === 'database' ? 'banco' : 'painel')} style={{cursor:'pointer'}}>
+                <img
+                  src="/hz-med-icon-64.png?v=20261126-logo"
+                  alt="HZ MED"
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg shrink-0 object-cover border border-purple-500/30 shadow-sm"
+                />
                 <span className="text-xl sm:text-2xl font-bold tracking-tighter text-black dark:text-white shrink-0">
                   BQ<span className="text-purple-600">H</span>Z
                 </span>
@@ -5829,7 +6469,11 @@
                         )}
                         <button
                           type="button"
-                          onClick={() => { setShowAulasFolderConfig(v => !v); setAulasFolderInput(aulasCatalog?.folderUrl || ''); }}
+                          onClick={() => {
+                            setShowAulasFolderConfig(v => !v);
+                            setAulasFolderInput(aulasCatalog?.folderUrl || '');
+                            setAulasApiKeyInput(aulasCatalog?.driveApiKey || '');
+                          }}
                           className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
                             showAulasFolderConfig
                               ? 'border-purple-500 bg-purple-600/15 text-purple-600 dark:text-purple-300'
@@ -5847,6 +6491,22 @@
                           <span className={aulasSyncing ? 'inline-block animate-spin' : 'inline-flex'}><Icons.Refresh /></span>
                           <span>{aulasSyncing ? 'Sincronizando…' : 'Sincronizar Drive'}</span>
                         </button>
+                        <button
+                          type="button"
+                          disabled={enablingPublicLink}
+                          onClick={() => {
+                            if (window.confirm('Liberar a pasta "HZ MED - Aulas" como leitor via link no Google Drive para tocar no Player Próprio do site sem pedir cookies nem login?')) {
+                              enableAulasPublicAccess();
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                            aulasCatalog?.isPublicLink
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                              : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20'
+                          }`}
+                        >
+                          <span>{aulasCatalog?.isPublicLink ? '🔓 Pasta liberada (Player HZ)' : (enablingPublicLink ? 'Liberando…' : '🔓 Liberar pasta (sem cookies/login)')}</span>
+                        </button>
                       </div>
 
                       {aulasSyncMessage && (
@@ -5856,44 +6516,74 @@
                       )}
 
                       {showAulasFolderConfig && (
-                        <form
-                          onSubmit={async (e) => {
-                            e.preventDefault();
-                            const ok = await saveAulasDriveFolder(aulasFolderInput);
-                            if (ok) { setShowAulasFolderConfig(false); setAulasFolderInput(''); }
-                          }}
-                          className="pt-2 border-t border-gray-200 dark:border-[#333] space-y-2.5"
-                        >
-                          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                            Link completo ou ID da pasta do Drive
-                          </label>
-                          <input
-                            type="text"
-                            value={aulasFolderInput}
-                            onChange={e => setAulasFolderInput(e.target.value)}
-                            placeholder="https://drive.google.com/drive/folders/..."
-                            className="w-full rounded-xl px-3 py-2 text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
-                          />
-                          <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                            Execute <code className="px-1 py-0.5 rounded bg-purple-500/15 text-purple-500 dark:text-purple-300">setupAulasDrive()</code> no Apps Script para criar <strong>HZ MED - Aulas</strong> ou cole outro link acima. Para qualidade HD direta sem player do Drive, compartilhe a pasta como leitor via link.
-                          </p>
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowAulasFolderConfig(false)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200 dark:bg-[#2d2d2d] text-gray-700 dark:text-gray-200"
-                            >
-                              Cancelar
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={aulasSyncing}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white"
-                            >
-                              {aulasSyncing ? 'Sincronizando…' : 'Vincular e Sincronizar'}
-                            </button>
-                          </div>
-                        </form>
+                        <div className="pt-2 border-t border-gray-200 dark:border-[#333] space-y-3">
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault();
+                              const ok = await saveAulasDriveFolder(aulasFolderInput);
+                              if (ok) { setShowAulasFolderConfig(false); setAulasFolderInput(''); }
+                            }}
+                            className="space-y-2.5"
+                          >
+                            <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                              Link completo ou ID da pasta do Drive
+                            </label>
+                            <input
+                              type="text"
+                              value={aulasFolderInput}
+                              onChange={e => setAulasFolderInput(e.target.value)}
+                              placeholder="https://drive.google.com/drive/folders/..."
+                              className="w-full rounded-xl px-3 py-2 text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
+                            />
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                              Execute <code className="px-1 py-0.5 rounded bg-purple-500/15 text-purple-500 dark:text-purple-300">setupAulasDrive()</code> no Apps Script para criar <strong>HZ MED - Aulas</strong> ou cole outro link acima.
+                            </p>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowAulasFolderConfig(false)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gray-200 dark:bg-[#2d2d2d] text-gray-700 dark:text-gray-200"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={aulasSyncing}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white"
+                              >
+                                {aulasSyncing ? 'Sincronizando…' : 'Vincular e Sincronizar'}
+                              </button>
+                            </div>
+                          </form>
+
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault();
+                              await saveAulasDriveApiKey(aulasApiKeyInput);
+                            }}
+                            className="pt-2.5 border-t border-gray-200 dark:border-[#333] space-y-2"
+                          >
+                            <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                              Chave de API do Google Drive (opcional · vídeos &gt; 100 MB)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={aulasApiKeyInput}
+                                onChange={e => setAulasApiKeyInput(e.target.value)}
+                                placeholder="AIzaSy..."
+                                className="flex-1 min-w-0 rounded-xl px-3 py-2 text-xs border border-gray-200 dark:border-[#3a3a3a] bg-white dark:bg-[#161616] text-gray-900 dark:text-white outline-none focus:border-purple-500"
+                              />
+                              <button
+                                type="submit"
+                                disabled={aulasSyncing}
+                                className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shrink-0"
+                              >
+                                Salvar chave
+                              </button>
+                            </div>
+                          </form>
+                        </div>
                       )}
                     </div>
 
@@ -6113,13 +6803,27 @@
               specialty:getBancoQuestionSpecialty(questions[0]), institution:questions[0]?.instituicao || '', year:questions[0]?.ano || '' }, reviewAll);
           };
 
-          const openBancoFilteredSelection = (questionIds, title, description) => {
+          const BANCO_SEARCH_STOPWORDS = new Set(['de','da','do','das','dos','e','em','no','na','nos','nas','com','por','para','a','o','as','os']);
+          const normalizeBancoSearchText = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').trim();
+          const getBancoSearchTokens = (query) => {
+            const words = normalizeBancoSearchText(query).split(/\s+/).filter(Boolean);
+            if (words.length <= 1) return words;
+            const significant = words.filter(w => !BANCO_SEARCH_STOPWORDS.has(w));
+            return significant.length ? significant : words;
+          };
+          const matchesBancoSearchTokens = (haystackNorm, tokens) => !tokens || !tokens.length || tokens.every(tok => haystackNorm.includes(tok));
+
+          const openBancoFilteredSelection = (questionIds, title, description, options = {}) => {
             const ids = Array.from(new Set((questionIds || []).map(String).filter(Boolean)));
             if (!ids.length) {
               window.alert('Nenhuma questão corresponde aos filtros selecionados.');
               return;
             }
-            const identity = ids.slice().sort().join('|');
+            const allowCompletedReview = Boolean(options?.allowCompletedReview);
+            const forceNewEntry = Boolean(options?.forceNewEntry);
+            const identity = forceNewEntry
+              ? `${ids.join(',')}|limit:${ids.length}|nonce:${Date.now().toString(36)}`
+              : ids.slice().sort().join('|');
             const entry = {
               id:`custom:${stableHash(identity)}`,
               type:'custom',
@@ -6129,7 +6833,7 @@
               startedAt:new Date().toISOString()
             };
             registerBancoStartedEntry(entry);
-            openBancoCustomEntry(entry, false);
+            openBancoCustomEntry(entry, allowCompletedReview);
           };
 
           const openSimuladosGeral = (reviewAll = false) => {
@@ -6173,10 +6877,20 @@
             const tab = bancoViewTab;
             const setTab = setBancoViewTab;
             const [search, setSearch] = useState('');
+            const [themeSearch, setThemeSearch] = useState('');
             const [showTaggedOnly, setShowTaggedOnly] = useState(false);
             const [showFilterBuilder, setShowFilterBuilder] = useState(true);
             const [selectedSpecialties, setSelectedSpecialties] = useState([]);
-            const [selectedThemes, setSelectedThemes] = useState([]);
+            const [selectedFilterKeys, setSelectedFilterKeys] = useState([]);
+            const [expandedMains, setExpandedMains] = useState({});
+            const [itemQuotas, setItemQuotas] = useState({});
+            const [globalLimit, setGlobalLimit] = useState('');
+            const [topSearchLimit, setTopSearchLimit] = useState('');
+            const [prioritizeUnanswered, setPrioritizeUnanswered] = useState(true);
+            const [shuffleQuestions, setShuffleQuestions] = useState(true);
+            const [includeCompletedFallback, setIncludeCompletedFallback] = useState(true);
+            const [sampleSeed, setSampleSeed] = useState(1);
+
             const exams = useMemo(() => {
               const map = new Map();
               (liveQuestions || []).forEach((q, index) => {
@@ -6186,22 +6900,116 @@
               });
               return Array.from(map.values()).map(exam => ({ ...exam, questions:exam.questions.slice().sort((a,b) => (Number(a.number)||0) - (Number(b.number)||0)) }));
             }, [liveQuestions]);
-            const completed = new Set((bancoCompletedQuestionIds || []).map(String));
+            const completed = useMemo(() => new Set((bancoCompletedQuestionIds || []).map(String)), [bancoCompletedQuestionIds]);
             const limboRecords = Object.values(bancoLimboRecords || {});
             const limboQuestions = limboRecords.map(record => ({ record, question:liveQuestions.find(q => String(q.id) === String(record.questionKey)) })).filter(x => x.question);
-            const specialtyOptions = useMemo(() => {
-              const counts = new Map();
+
+            // Parse completo de especialidade -> tema principal -> subtema -> tags extras por questão
+            const parsedTaxonomy = useMemo(() => {
+              const byQuestionId = new Map();
+              const specMap = new Map(); // specName -> { name, totalIds:Set, mains:Map }
+              const extraTagMap = new Map(); // tagKeyNorm -> { tagKey, label, bySpec:Map<spec, Set>, allIds:Set }
+
               (liveQuestions || []).forEach(q => {
-                const label = getBancoQuestionSpecialty(q);
-                counts.set(label, (counts.get(label) || 0) + 1);
+                const qid = String(q.id);
+                const specialty = getBancoQuestionSpecialty(q);
+                const specKey = taxonomyTextKeyClient(specialty);
+                const rawPath = (q.temaPath && q.temaPath !== 'Classificação pendente')
+                  ? q.temaPath
+                  : ((q.temaGeral && q.temaGeral !== 'Classificação pendente') ? q.temaGeral : (q.theme || q.temaNome || []));
+                const rawParts = normalizeTaxonomyPathClient(rawPath);
+                const parts = rawParts.length && taxonomyTextKeyClient(rawParts[0]) === specKey ? rawParts.slice(1) : rawParts;
+                const mainTheme = parts[0] || String((q.temaClassificado === false ? '' : q.subtema) || 'Sem tema');
+                const subtheme = parts.length > 1 ? parts.slice(1).join(' › ') : '';
+                const mainKeyNorm = taxonomyTextKeyClient(mainTheme) || 'sem-tema';
+                const subKeyNorm = subtheme ? taxonomyTextKeyClient(subtheme) : '';
+
+                const mainKey = `main::${specialty}::${mainKeyNorm}`;
+                const subKey = subtheme ? `sub::${specialty}::${mainKeyNorm}::${subKeyNorm}` : '';
+
+                if (!specMap.has(specialty)) {
+                  specMap.set(specialty, { name:specialty, totalIds:new Set(), mains:new Map() });
+                }
+                const specNode = specMap.get(specialty);
+                specNode.totalIds.add(qid);
+
+                if (!specNode.mains.has(mainKeyNorm)) {
+                  specNode.mains.set(mainKeyNorm, {
+                    mainKey,
+                    groupKey:`${specialty}::${mainKeyNorm}`,
+                    specialty,
+                    label:mainTheme,
+                    searchNorm:normalizeBancoSearchText(`${specialty} ${mainTheme}`),
+                    ids:new Set(),
+                    directIds:new Set(),
+                    subthemes:new Map()
+                  });
+                }
+                const mainNode = specNode.mains.get(mainKeyNorm);
+                mainNode.ids.add(qid);
+
+                if (subtheme) {
+                  if (!mainNode.subthemes.has(subKeyNorm)) {
+                    mainNode.subthemes.set(subKeyNorm, {
+                      subKey,
+                      mainKey,
+                      specialty,
+                      mainLabel:mainTheme,
+                      label:subtheme,
+                      searchNorm:normalizeBancoSearchText(`${specialty} ${mainTheme} ${subtheme}`),
+                      ids:new Set()
+                    });
+                  }
+                  mainNode.subthemes.get(subKeyNorm).ids.add(qid);
+                } else {
+                  mainNode.directIds.add(qid);
+                }
+
+                // Tags adicionais além da especialidade/tema/subtema hierárquicos
+                const allTags = getBancoQuestionTags(q);
+                const qTagKeys = [];
+                allTags.forEach(tLabel => {
+                  const tNorm = taxonomyTextKeyClient(tLabel);
+                  if (!tNorm || tNorm === specKey || tNorm === mainKeyNorm || (subKeyNorm && tNorm === subKeyNorm)) return;
+                  const tagKey = `tag::${tNorm}`;
+                  qTagKeys.push(tagKey);
+                  if (!extraTagMap.has(tNorm)) {
+                    extraTagMap.set(tNorm, { tagKey, label:tLabel, searchNorm:normalizeBancoSearchText(tLabel), allIds:new Set(), bySpec:new Map() });
+                  }
+                  const tagEntry = extraTagMap.get(tNorm);
+                  tagEntry.allIds.add(qid);
+                  if (!tagEntry.bySpec.has(specialty)) tagEntry.bySpec.set(specialty, new Set());
+                  tagEntry.bySpec.get(specialty).add(qid);
+                });
+
+                const questionBlob = normalizeBancoSearchText([
+                  q.examTitle, q.temaInstituicao || q.instituicao, q.temaAno || q.ano,
+                  specialty, mainTheme, subtheme, ...allTags
+                ].filter(Boolean).join(' '));
+
+                byQuestionId.set(qid, { qid, specialty, mainTheme, subtheme, mainKey, subKey, qTagKeys, allTags, searchBlob:questionBlob });
               });
-              return Array.from(counts.entries()).map(([label,count]) => ({label,count})).sort((a,b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+              const specialtyList = Array.from(specMap.values()).map(sp => ({
+                name:sp.name,
+                label:sp.name,
+                count:sp.totalIds.size,
+                ids:Array.from(sp.totalIds),
+                mains:Array.from(sp.mains.values()).map(m => ({
+                  ...m,
+                  count:m.ids.size,
+                  idList:Array.from(m.ids),
+                  directList:Array.from(m.directIds),
+                  subthemeList:Array.from(m.subthemes.values()).map(s => ({ ...s, count:s.ids.size, idList:Array.from(s.ids) }))
+                    .sort((a,b) => a.label.localeCompare(b.label, 'pt-BR'))
+                })).sort((a,b) => a.label.localeCompare(b.label, 'pt-BR'))
+              })).sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+              const extraTagsList = Array.from(extraTagMap.values()).sort((a,b) => a.label.localeCompare(b.label, 'pt-BR'));
+              return { byQuestionId, specMap, specialtyList, extraTagMap, extraTagsList };
             }, [liveQuestions]);
-            const themeOptions = useMemo(() => {
-              const counts = new Map();
-              (liveQuestions || []).forEach(q => getBancoQuestionTags(q).forEach(label => counts.set(label, (counts.get(label) || 0) + 1)));
-              return Array.from(counts.entries()).map(([label,count]) => ({label,count})).sort((a,b) => a.label.localeCompare(b.label, 'pt-BR'));
-            }, [liveQuestions]);
+
+            const specialtyOptions = parsedTaxonomy.specialtyList;
             const taxonomyGroups = useMemo(() => {
               const groups = new Map();
               (liveQuestions || []).forEach(q => {
@@ -6221,22 +7029,250 @@
                 topics:Array.from(topics.values()).sort((a,b)=>a.label.localeCompare(b.label,'pt-BR'))
               })).sort((a,b)=>a.specialty.localeCompare(b.specialty,'pt-BR'));
             }, [liveQuestions]);
-            const selectedQuestionIds = useMemo(() => (liveQuestions || []).filter(q => {
-              const specialty = getBancoQuestionSpecialty(q);
-              const tags = getBancoQuestionTags(q);
-              const specialtyOk = !selectedSpecialties.length || selectedSpecialties.includes(specialty);
-              const themeOk = !selectedThemes.length || selectedThemes.some(theme => tags.some(tag => taxonomyTextKeyClient(tag) === taxonomyTextKeyClient(theme)));
-              return specialtyOk && themeOk;
-            }).map(q => String(q.id)), [liveQuestions, selectedSpecialties, selectedThemes]);
-            const normalizedSearch = search.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
-            const visibleExams = exams.filter(exam => {
+
+            // Mapa de lookup para qualquer chave selecionada em TEMAS E TAGS
+            const filterKeyInfo = useMemo(() => {
+              const map = new Map();
+              const activeSpecSet = new Set(selectedSpecialties);
+              parsedTaxonomy.specialtyList.forEach(sp => {
+                map.set(`spec::${sp.name}`, { key:`spec::${sp.name}`, label:sp.name, specialty:sp.name, ids:sp.ids });
+                sp.mains.forEach(m => {
+                  map.set(m.mainKey, { key:m.mainKey, label:`${m.specialty} · ${m.label}`, shortLabel:m.label, specialty:m.specialty, ids:m.idList });
+                  m.subthemeList.forEach(s => {
+                    map.set(s.subKey, { key:s.subKey, label:`${s.specialty} · ${s.label}`, shortLabel:s.label, specialty:s.specialty, ids:s.idList });
+                  });
+                });
+              });
+              parsedTaxonomy.extraTagsList.forEach(t => {
+                const ids = activeSpecSet.size
+                  ? Array.from(t.allIds).filter(id => activeSpecSet.has(parsedTaxonomy.byQuestionId.get(id)?.specialty))
+                  : Array.from(t.allIds);
+                map.set(t.tagKey, { key:t.tagKey, label:`Tag: ${t.label}`, shortLabel:t.label, specialty:'', ids });
+              });
+              return map;
+            }, [parsedTaxonomy, selectedSpecialties]);
+
+            // Árvore visível na coluna "TEMAS E TAGS" considerando especialidades marcadas + busca interna
+            const visibleThemeTree = useMemo(() => {
+              const activeSpecSet = new Set(selectedSpecialties);
+              const tokens = getBancoSearchTokens(themeSearch);
+              const scopedSpecs = activeSpecSet.size
+                ? parsedTaxonomy.specialtyList.filter(sp => activeSpecSet.has(sp.name))
+                : parsedTaxonomy.specialtyList;
+
+              const nodes = [];
+              scopedSpecs.forEach(sp => {
+                sp.mains.forEach(m => {
+                  const mainMatched = tokens.length ? matchesBancoSearchTokens(m.searchNorm, tokens) : true;
+                  const matchingSubs = tokens.length
+                    ? (mainMatched ? m.subthemeList : m.subthemeList.filter(s => matchesBancoSearchTokens(s.searchNorm, tokens)))
+                    : m.subthemeList;
+                  if (!tokens.length || mainMatched || matchingSubs.length > 0) {
+                    nodes.push({ ...m, visibleSubthemes:matchingSubs });
+                  }
+                });
+              });
+
+              const visibleTags = parsedTaxonomy.extraTagsList.map(t => {
+                const count = activeSpecSet.size
+                  ? selectedSpecialties.reduce((sum, spName) => sum + (t.bySpec.get(spName)?.size || 0), 0)
+                  : t.allIds.size;
+                return { ...t, scopedCount:count };
+              }).filter(t => t.scopedCount > 0 && (!tokens.length || matchesBancoSearchTokens(t.searchNorm, tokens)));
+
+              return { nodes, visibleTags, hasSearch:tokens.length > 0 };
+            }, [parsedTaxonomy, selectedSpecialties, themeSearch]);
+
+            const toggleSpecialtyFilter = (spName, checked) => {
+              const next = checked
+                ? Array.from(new Set([...selectedSpecialties, spName]))
+                : selectedSpecialties.filter(x => x !== spName);
+              setSelectedSpecialties(next);
+              if (next.length > 0) {
+                const nextSet = new Set(next);
+                setSelectedFilterKeys(prevKeys => prevKeys.filter(k => {
+                  if (k.startsWith('main::') || k.startsWith('sub::')) {
+                    const sp = k.split('::')[1];
+                    return nextSet.has(sp);
+                  }
+                  return true;
+                }));
+              }
+            };
+
+            const toggleLeafFilterKey = (key, checked) => {
+              setSelectedFilterKeys(prev => checked ? Array.from(new Set([...prev, key])) : prev.filter(x => x !== key));
+            };
+
+            const toggleMainThemeSelection = (mainNode, checkAll) => {
+              const subKeys = (mainNode.subthemeList || []).map(s => s.subKey);
+              if (subKeys.length > 0) {
+                setSelectedFilterKeys(prev => {
+                  const set = new Set(prev);
+                  if (checkAll) {
+                    subKeys.forEach(k => set.add(k));
+                    if (mainNode.directList.length > 0) set.add(mainNode.mainKey);
+                  } else {
+                    set.delete(mainNode.mainKey);
+                    subKeys.forEach(k => set.delete(k));
+                  }
+                  return Array.from(set);
+                });
+              } else {
+                toggleLeafFilterKey(mainNode.mainKey, checkAll);
+              }
+            };
+
+            const markAllVisibleThemes = () => {
+              const keys = new Set(selectedFilterKeys);
+              visibleThemeTree.nodes.forEach(m => {
+                if (m.visibleSubthemes.length > 0) {
+                  m.visibleSubthemes.forEach(s => keys.add(s.subKey));
+                  if (m.directList.length > 0 && visibleThemeTree.nodes.some(n => n.mainKey === m.mainKey)) {
+                    if (m.visibleSubthemes.length === m.subthemeList.length) keys.add(m.mainKey);
+                  }
+                } else {
+                  keys.add(m.mainKey);
+                }
+              });
+              visibleThemeTree.visibleTags.forEach(t => keys.add(t.tagKey));
+              setSelectedFilterKeys(Array.from(keys));
+            };
+
+            // Baldes selecionados com contagem individual e cota ajustável por tema/especialidade
+            const selectedBuckets = useMemo(() => {
+              const keysToBuild = selectedFilterKeys.length > 0
+                ? selectedFilterKeys
+                : selectedSpecialties.map(sp => `spec::${sp}`);
+              return keysToBuild.map(key => {
+                const info = filterKeyInfo.get(key);
+                if (!info) return null;
+                const allIds = info.ids || [];
+                const pendingIds = allIds.filter(id => !completed.has(id));
+                const eligibleIds = includeCompletedFallback ? allIds : pendingIds;
+                const rawQuota = Object.prototype.hasOwnProperty.call(itemQuotas, key) ? Number(itemQuotas[key]) : eligibleIds.length;
+                const quota = Math.max(0, Math.min(eligibleIds.length, Number.isFinite(rawQuota) ? Math.floor(rawQuota) : eligibleIds.length));
+                return {
+                  key,
+                  label:info.label,
+                  shortLabel:info.shortLabel || info.label,
+                  allIds,
+                  pendingCount:pendingIds.length,
+                  eligibleIds,
+                  maxCount:eligibleIds.length,
+                  quota
+                };
+              }).filter(b => b && b.allIds.length > 0);
+            }, [selectedFilterKeys, selectedSpecialties, filterKeyInfo, completed, includeCompletedFallback, itemQuotas]);
+
+            // Amostrador balanceado respeitando cota de cada tema, limite global e prioridade para não respondidas
+            const sampledSelection = useMemo(() => {
+              if (!selectedBuckets.length) return { ids:[], perBucketSelected:{} };
+              const deterministicOrder = (list, salt) => {
+                if (!shuffleQuestions) return list.slice();
+                return list
+                  .map(id => [id, stableHash(`${sampleSeed}:${salt}:${id}`)])
+                  .sort((x, y) => (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : String(x[0]).localeCompare(String(y[0]))))
+                  .map(pair => pair[0]);
+              };
+
+              const queues = selectedBuckets.map(bucket => {
+                const pend = bucket.eligibleIds.filter(id => !completed.has(id));
+                const done = bucket.eligibleIds.filter(id => completed.has(id));
+                const ordered = prioritizeUnanswered
+                  ? [...deterministicOrder(pend, bucket.key + ':p'), ...deterministicOrder(done, bucket.key + ':d')]
+                  : deterministicOrder(bucket.eligibleIds, bucket.key);
+                return {
+                  key:bucket.key,
+                  quota:bucket.quota,
+                  pool:ordered,
+                  cursor:0,
+                  picked:[]
+                };
+              });
+
+              const sumQuotas = queues.reduce((sum, q) => sum + q.quota, 0);
+              const parsedGlobal = String(globalLimit || '').trim() === '' ? 0 : Math.max(0, Math.floor(Number(globalLimit) || 0));
+              const targetTotal = parsedGlobal > 0 ? Math.min(parsedGlobal, sumQuotas) : sumQuotas;
+
+              const pickedIds = [];
+              const seen = new Set();
+
+              if (targetTotal > 0) {
+                let progressed = true;
+                while (pickedIds.length < targetTotal && progressed) {
+                  progressed = false;
+                  for (let i = 0; i < queues.length && pickedIds.length < targetTotal; i++) {
+                    const q = queues[i];
+                    if (q.picked.length >= q.quota) continue;
+                    while (q.cursor < q.pool.length && seen.has(q.pool[q.cursor])) {
+                      q.cursor++;
+                    }
+                    if (q.cursor < q.pool.length) {
+                      const chosen = q.pool[q.cursor++];
+                      seen.add(chosen);
+                      q.picked.push(chosen);
+                      pickedIds.push(chosen);
+                      progressed = true;
+                    }
+                  }
+                }
+              }
+
+              const perBucketSelected = Object.fromEntries(queues.map(q => [q.key, q.picked.length]));
+              return { ids:pickedIds, sumQuotas, perBucketSelected };
+            }, [selectedBuckets, completed, prioritizeUnanswered, shuffleQuestions, sampleSeed, globalLimit]);
+
+            // Pesquisa rápida no topo (por nome da prova, especialidade, tema, subtema ou tag)
+            const topSearchTokens = useMemo(() => getBancoSearchTokens(search), [search]);
+            const topSearchResults = useMemo(() => {
+              if (!topSearchTokens.length) return { matchingIds:[], matchingChips:[] };
+              const matchingIds = [];
+              const chipCounts = new Map();
+              (liveQuestions || []).forEach(q => {
+                const qid = String(q.id);
+                const info = parsedTaxonomy.byQuestionId.get(qid);
+                if (!info || !matchesBancoSearchTokens(info.searchBlob, topSearchTokens)) return;
+                matchingIds.push(qid);
+                const chipKey = info.subKey || info.mainKey;
+                const chipLabel = info.subtheme ? `${info.specialty} · ${info.subtheme}` : `${info.specialty} · ${info.mainTheme}`;
+                if (!chipCounts.has(chipKey)) chipCounts.set(chipKey, { key:chipKey, label:chipLabel, count:0 });
+                chipCounts.get(chipKey).count++;
+              });
+              const matchingChips = Array.from(chipCounts.values()).sort((a,b) => b.count - a.count).slice(0, 12);
+              return { matchingIds, matchingChips };
+            }, [liveQuestions, parsedTaxonomy, topSearchTokens]);
+
+            // Questão individual atende ao filtro atual de especialidades/temas/tags (para filtrar "Provas cadastradas")
+            const selectedFilterSet = useMemo(() => new Set(selectedFilterKeys), [selectedFilterKeys]);
+            const selectedSpecSet = useMemo(() => new Set(selectedSpecialties), [selectedSpecialties]);
+            const questionMatchesActiveFilters = (q) => {
+              const qid = String(q.id);
+              const info = parsedTaxonomy.byQuestionId.get(qid);
+              if (!info) return false;
+              if (selectedSpecSet.size && !selectedSpecSet.has(info.specialty)) return false;
+              if (selectedFilterSet.size) {
+                const hit = selectedFilterSet.has(info.mainKey) || (info.subKey && selectedFilterSet.has(info.subKey)) || info.qTagKeys.some(tk => selectedFilterSet.has(tk));
+                if (!hit) return false;
+              }
+              if (topSearchTokens.length && !matchesBancoSearchTokens(info.searchBlob, topSearchTokens)) return false;
+              return true;
+            };
+
+            const hasActiveExamFilter = selectedSpecialties.length > 0 || selectedFilterKeys.length > 0 || topSearchTokens.length > 0;
+            const visibleExams = exams.map(exam => {
+              const filteredQuestions = hasActiveExamFilter ? exam.questions.filter(questionMatchesActiveFilters) : exam.questions;
+              return { ...exam, filteredQuestions };
+            }).filter(exam => {
               const tagged = exam.questions.some(q => q.temaClassificado === true || getBancoQuestionTags(q).length > 0);
               if (showTaggedOnly && !tagged) return false;
-              if (!normalizedSearch) return true;
-              const haystack = [exam.title, exam.specialty, exam.institution, exam.year,
-                ...exam.questions.flatMap(q => [getBancoQuestionSpecialty(q), ...getBancoQuestionTags(q)])]
-                .join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-              return haystack.includes(normalizedSearch);
+              if (!hasActiveExamFilter) return true;
+              const titleNorm = normalizeBancoSearchText([exam.title, exam.specialty, exam.institution, exam.year].filter(Boolean).join(' '));
+              if (exam.filteredQuestions.length > 0) return true;
+              if (topSearchTokens.length && !selectedSpecialties.length && !selectedFilterKeys.length && matchesBancoSearchTokens(titleNorm, topSearchTokens)) {
+                return true;
+              }
+              return false;
             });
             const storedEntries = Array.isArray(bancoStartedEntries) ? bancoStartedEntries.slice() : [];
             const initiatedById = new Map(storedEntries.map(entry => [String(entry.id), entry]));
@@ -6319,31 +7355,402 @@
                     {tab === 'provas' && (
                       <>
                         <div className="rounded-2xl border border-gray-200 dark:border-[#303030] bg-white dark:bg-[#1A1A1A] p-4 sm:p-5 space-y-4">
-                          <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icons.Search /></span><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pesquisar prova, especialidade ou tema..." className="w-full pl-11 pr-4 py-3 rounded-xl bg-gray-100 dark:bg-[#242424] border border-gray-200 dark:border-[#3A3A3A] outline-none focus:border-purple-500 text-sm" /></div>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Icons.Search /></span>
+                            <input
+                              value={search}
+                              onChange={e => setSearch(e.target.value)}
+                              placeholder="Pesquisar prova, especialidade, tema, subtema ou tag (ex: trauma de cervical)..."
+                              className="w-full pl-11 pr-20 py-3 rounded-xl bg-gray-100 dark:bg-[#242424] border border-gray-200 dark:border-[#3A3A3A] outline-none focus:border-purple-500 text-sm"
+                            />
+                            {search && (
+                              <button
+                                type="button"
+                                onClick={() => { setSearch(''); setTopSearchLimit(''); }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-purple-500 hover:underline"
+                              >
+                                Limpar
+                              </button>
+                            )}
+                          </div>
+
+                          {topSearchTokens.length > 0 && (
+                            <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-3.5 space-y-3" data-hz-quick-search-results="1">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="text-xs sm:text-sm">
+                                  <b className="text-purple-500">{topSearchResults.matchingIds.length}</b> questão(ões) encontrada(s) para <span className="font-semibold">“{search.trim()}”</span>
+                                </div>
+                                {topSearchResults.matchingIds.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                                      <span>Qtd:</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max={topSearchResults.matchingIds.length}
+                                        value={topSearchLimit}
+                                        onChange={e => setTopSearchLimit(e.target.value)}
+                                        placeholder={String(topSearchResults.matchingIds.length)}
+                                        className="w-16 px-2 py-1 rounded-lg bg-white dark:bg-[#181818] border border-gray-300 dark:border-[#3A3A3A] text-xs font-bold text-center outline-none focus:border-purple-500"
+                                      />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const cap = topSearchLimit ? Math.max(1, Math.min(topSearchResults.matchingIds.length, Math.floor(Number(topSearchLimit) || 0))) : topSearchResults.matchingIds.length;
+                                        const ordered = prioritizeUnanswered
+                                          ? [...topSearchResults.matchingIds.filter(id => !completed.has(id)), ...topSearchResults.matchingIds.filter(id => completed.has(id))]
+                                          : topSearchResults.matchingIds;
+                                        const finalIds = ordered.slice(0, cap);
+                                        openBancoFilteredSelection(finalIds, `Pesquisa: ${search.trim()} · ${finalIds.length} questões`, `${finalIds.length} questões correspondentes`, { allowCompletedReview:true, forceNewEntry:true });
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black transition-colors"
+                                    >
+                                      Criar simulado desta busca
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
+                              {topSearchResults.matchingChips.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {topSearchResults.matchingChips.map(chip => {
+                                    const active = selectedFilterKeys.includes(chip.key);
+                                    return (
+                                      <button
+                                        key={chip.key}
+                                        type="button"
+                                        onClick={() => toggleLeafFilterKey(chip.key, !active)}
+                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                          active
+                                            ? 'bg-purple-600 border-purple-500 text-white'
+                                            : 'bg-white dark:bg-[#1E1E1E] border-gray-200 dark:border-[#353535] text-gray-700 dark:text-gray-200 hover:border-purple-500/60'
+                                        }`}
+                                      >
+                                        {active ? '✓ ' : '+ '}{chip.label} ({chip.count})
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <label className="flex items-center justify-between gap-3 cursor-pointer"><span className="min-w-0"><span className="block text-sm font-bold">Mostrar somente provas com tags</span><span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">Exibe provas que possuem questões classificadas por especialidade/tema.</span></span><span className="relative inline-flex items-center shrink-0"><input type="checkbox" role="switch" aria-label="Mostrar somente provas com tags" checked={showTaggedOnly} onChange={e => setShowTaggedOnly(e.target.checked)} className="peer sr-only" /><span className="w-11 h-6 rounded-full bg-gray-300 dark:bg-[#444] peer-checked:bg-purple-600 transition-colors"></span><span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5 pointer-events-none"></span></span></label>
                         </div>
+
                         <section className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 sm:p-5 space-y-4">
-                          <button type="button" onClick={() => setShowFilterBuilder(v => !v)} className="w-full flex items-center justify-between gap-3 text-left"><span><span className="block text-sm font-black">Montar simulado por filtros</span><span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">Marque uma ou mais especialidades e/ou temas para reunir somente essas questões.</span></span><span className="text-purple-500 font-black">{showFilterBuilder?'−':'+'}</span></button>
+                          <button type="button" onClick={() => setShowFilterBuilder(v => !v)} className="w-full flex items-center justify-between gap-3 text-left"><span><span className="block text-sm font-black">Montar simulado por filtros</span><span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">Selecione especialidades para filtrar seus temas/subtemas, pesquise rápido dentro de Temas e Tags e ajuste quantas questões deseja de cada assunto.</span></span><span className="text-purple-500 font-black">{showFilterBuilder?'−':'+'}</span></button>
                           {showFilterBuilder && (
                             <>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="rounded-xl bg-white dark:bg-[#181818] border border-gray-200 dark:border-[#303030] p-3">
-                                  <div className="flex items-center justify-between gap-2 mb-2"><h3 className="text-xs font-black uppercase tracking-wide">Especialidades</h3><button type="button" onClick={() => setSelectedSpecialties([])} className="text-[10px] font-bold text-purple-500">Limpar</button></div>
-                                  <div className="max-h-56 overflow-y-auto overscroll-contain space-y-1 pr-1">{specialtyOptions.map(option => <label key={option.label} className="flex items-center gap-2 py-1.5 text-xs cursor-pointer"><input type="checkbox" checked={selectedSpecialties.includes(option.label)} onChange={e => setSelectedSpecialties(prev => e.target.checked ? [...prev,option.label] : prev.filter(x=>x!==option.label))} className="h-4 w-4 accent-purple-600"/><span className="flex-1">{option.label}</span><span className="text-gray-400 tabular-nums">{option.count}</span></label>)}</div>
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                {/* Coluna 1: Especialidades */}
+                                <div className="lg:col-span-5 rounded-xl bg-white dark:bg-[#181818] border border-gray-200 dark:border-[#303030] p-3 flex flex-col">
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h3 className="text-xs font-black uppercase tracking-wide">Especialidades</h3>
+                                    <button type="button" onClick={() => { setSelectedSpecialties([]); setSelectedFilterKeys([]); setItemQuotas({}); }} className="text-[10px] font-bold text-purple-500 hover:underline">Limpar</button>
+                                  </div>
+                                  <div className="max-h-72 overflow-y-auto overscroll-contain space-y-1 pr-1">
+                                    {specialtyOptions.map(option => (
+                                      <label key={option.name} className="flex items-center gap-2 py-1.5 px-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-[#222] text-xs cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedSpecialties.includes(option.name)}
+                                          onChange={e => toggleSpecialtyFilter(option.name, e.target.checked)}
+                                          className="h-4 w-4 accent-purple-600 shrink-0"
+                                        />
+                                        <span className="flex-1 font-medium">{option.name}</span>
+                                        <span className="text-gray-400 tabular-nums font-semibold">{option.count}</span>
+                                      </label>
+                                    ))}
+                                  </div>
                                 </div>
-                                <div className="rounded-xl bg-white dark:bg-[#181818] border border-gray-200 dark:border-[#303030] p-3">
-                                  <div className="flex items-center justify-between gap-2 mb-2"><h3 className="text-xs font-black uppercase tracking-wide">Temas e tags</h3><button type="button" onClick={() => setSelectedThemes([])} className="text-[10px] font-bold text-purple-500">Limpar</button></div>
-                                  <div className="max-h-56 overflow-y-auto overscroll-contain space-y-1 pr-1">{themeOptions.map(option => <label key={option.label} className="flex items-center gap-2 py-1.5 text-xs cursor-pointer"><input type="checkbox" checked={selectedThemes.includes(option.label)} onChange={e => setSelectedThemes(prev => e.target.checked ? [...prev,option.label] : prev.filter(x=>x!==option.label))} className="h-4 w-4 accent-purple-600"/><span className="flex-1">{option.label}</span><span className="text-gray-400 tabular-nums">{option.count}</span></label>)}</div>
+
+                                {/* Coluna 2: Temas, Subtemas e Tags com busca rápida + cascata */}
+                                <div className="lg:col-span-7 rounded-xl bg-white dark:bg-[#181818] border border-gray-200 dark:border-[#303030] p-3 flex flex-col">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                    <div>
+                                      <h3 className="text-xs font-black uppercase tracking-wide">Temas e tags</h3>
+                                      {selectedSpecialties.length > 0 && (
+                                        <div className="text-[10px] text-purple-500 font-semibold">Filtrado por: {selectedSpecialties.join(', ')}</div>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                      <button type="button" onClick={markAllVisibleThemes} className="text-[10px] font-bold text-purple-500 hover:underline">Marcar visíveis</button>
+                                      <button type="button" onClick={() => { setSelectedFilterKeys([]); setItemQuotas({}); }} className="text-[10px] font-bold text-gray-500 hover:text-purple-500">Limpar</button>
+                                    </div>
+                                  </div>
+
+                                  <div className="relative mb-2.5">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"><Icons.Search /></span>
+                                    <input
+                                      type="text"
+                                      value={themeSearch}
+                                      onChange={e => setThemeSearch(e.target.value)}
+                                      placeholder="Pesquisar tema, subtema ou tag (ex: trauma de cervical)..."
+                                      aria-label="Pesquisar em Temas e tags"
+                                      className="w-full pl-9 pr-14 py-2 rounded-lg bg-gray-100 dark:bg-[#232323] border border-gray-200 dark:border-[#363636] text-xs outline-none focus:border-purple-500"
+                                    />
+                                    {themeSearch && (
+                                      <button type="button" onClick={() => setThemeSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-purple-500">Limpar</button>
+                                    )}
+                                  </div>
+
+                                  <div className="max-h-72 overflow-y-auto overscroll-contain space-y-1.5 pr-1">
+                                    {visibleThemeTree.nodes.map(m => {
+                                      const hasSubs = m.subthemeList.length > 0;
+                                      const isExpanded = visibleThemeTree.hasSearch || selectedSpecialties.length > 0 || expandedMains[m.groupKey] === true;
+                                      const checkedSubCount = m.visibleSubthemes.filter(s => selectedFilterKeys.includes(s.subKey)).length;
+                                      const mainChecked = hasSubs
+                                        ? (m.visibleSubthemes.length > 0 && checkedSubCount === m.visibleSubthemes.length)
+                                        : selectedFilterKeys.includes(m.mainKey);
+                                      const mainPartial = hasSubs && checkedSubCount > 0 && checkedSubCount < m.visibleSubthemes.length;
+
+                                      return (
+                                        <div key={m.mainKey} className="rounded-lg border border-gray-100 dark:border-[#292929] bg-gray-50/70 dark:bg-[#1f1f22] px-2 py-1">
+                                          <div className="flex items-center gap-2 py-1 text-xs">
+                                            <input
+                                              type="checkbox"
+                                              checked={mainChecked}
+                                              ref={el => { if (el) el.indeterminate = mainPartial; }}
+                                              onChange={e => toggleMainThemeSelection(m, e.target.checked)}
+                                              className="h-4 w-4 accent-purple-600 shrink-0 cursor-pointer"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => hasSubs ? setExpandedMains(prev => ({ ...prev, [m.groupKey]: !isExpanded })) : toggleMainThemeSelection(m, !mainChecked)}
+                                              className="flex-1 min-w-0 text-left flex items-center gap-1.5 font-semibold"
+                                            >
+                                              {hasSubs && <span className="text-[10px] text-gray-400 w-3 inline-block">{isExpanded ? '▾' : '▸'}</span>}
+                                              <span className="truncate">{m.label}</span>
+                                              {selectedSpecialties.length !== 1 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 shrink-0">{m.specialty}</span>}
+                                            </button>
+                                            <span className="text-gray-400 tabular-nums text-[11px] shrink-0">{m.count}</span>
+                                          </div>
+
+                                          {hasSubs && isExpanded && (
+                                            <div className="pl-5 pb-1 space-y-0.5 border-l border-purple-500/20 ml-2 mt-0.5">
+                                              {m.visibleSubthemes.map(sub => (
+                                                <label key={sub.subKey} className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-white/70 dark:hover:bg-[#28282c] text-xs cursor-pointer">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={selectedFilterKeys.includes(sub.subKey)}
+                                                    onChange={e => toggleLeafFilterKey(sub.subKey, e.target.checked)}
+                                                    className="h-3.5 w-3.5 accent-purple-600 shrink-0"
+                                                  />
+                                                  <span className="flex-1 truncate text-gray-700 dark:text-gray-200">{sub.label}</span>
+                                                  <span className="text-gray-400 tabular-nums text-[11px]">{sub.count}</span>
+                                                </label>
+                                              ))}
+                                              {m.directList.length > 0 && (
+                                                <label className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-white/70 dark:hover:bg-[#28282c] text-xs cursor-pointer">
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={selectedFilterKeys.includes(m.mainKey)}
+                                                    onChange={e => toggleLeafFilterKey(m.mainKey, e.target.checked)}
+                                                    className="h-3.5 w-3.5 accent-purple-600 shrink-0"
+                                                  />
+                                                  <span className="flex-1 truncate italic text-gray-500 dark:text-gray-400">Geral de {m.label}</span>
+                                                  <span className="text-gray-400 tabular-nums text-[11px]">{m.directList.length}</span>
+                                                </label>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+
+                                    {visibleThemeTree.visibleTags.length > 0 && (
+                                      <div className="pt-2 mt-2 border-t border-gray-200 dark:border-[#2e2e2e]">
+                                        <div className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Tags adicionais</div>
+                                        {visibleThemeTree.visibleTags.map(t => (
+                                          <label key={t.tagKey} className="flex items-center gap-2 py-1.5 px-1.5 rounded hover:bg-gray-50 dark:hover:bg-[#222] text-xs cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedFilterKeys.includes(t.tagKey)}
+                                              onChange={e => toggleLeafFilterKey(t.tagKey, e.target.checked)}
+                                              className="h-4 w-4 accent-purple-600 shrink-0"
+                                            />
+                                            <span className="flex-1 truncate">{t.label}</span>
+                                            <span className="text-gray-400 tabular-nums text-[11px]">{t.scopedCount}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {!visibleThemeTree.nodes.length && !visibleThemeTree.visibleTags.length && (
+                                      <div className="py-6 text-center text-xs text-gray-500">Nenhum tema ou tag corresponde à pesquisa atual.</div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center justify-between gap-3"><div className="text-xs text-gray-600 dark:text-gray-300"><b className="text-purple-500">{selectedQuestionIds.length}</b> questões correspondem à seleção · {selectedSpecialties.length} especialidade(s) · {selectedThemes.length} tema(s)</div><button type="button" disabled={!selectedQuestionIds.length || (!selectedSpecialties.length && !selectedThemes.length)} onClick={() => openBancoFilteredSelection(selectedQuestionIds, `Simulado por filtros · ${selectedQuestionIds.length} questões`, [...selectedSpecialties,...selectedThemes].join(' · '))} className="rounded-xl px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black disabled:opacity-40">Criar e iniciar simulado</button></div>
+
+                              {/* Resumo e ajuste fino da quantidade de questões por tema/especialidade */}
+                              {selectedBuckets.length > 0 && (
+                                <div className="rounded-xl bg-white dark:bg-[#181818] border border-purple-500/25 p-3.5 sm:p-4 space-y-3" data-hz-quota-panel="1">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                      <h4 className="text-xs sm:text-sm font-black">Resumo e quantidade por item selecionado</h4>
+                                      <p className="text-[11px] text-gray-500 dark:text-gray-400">Deixe tudo ou reduza a quantidade exata de questões de cada tema antes de iniciar.</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setItemQuotas({}); setGlobalLimit(''); }}
+                                      className="text-xs font-bold text-purple-500 hover:underline"
+                                    >
+                                      Usar todas ({selectedBuckets.reduce((s, b) => s + b.maxCount, 0)})
+                                    </button>
+                                  </div>
+
+                                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                    {selectedBuckets.map(bucket => (
+                                      <div key={bucket.key} className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 rounded-xl bg-gray-50 dark:bg-[#222226] border border-gray-200 dark:border-[#323238] px-3 py-2">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-xs font-bold truncate">{bucket.label}</div>
+                                          <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                                            {bucket.maxCount} disponíveis · {bucket.pendingCount} pendentes
+                                            {sampledSelection.perBucketSelected[bucket.key] !== undefined && sampledSelection.perBucketSelected[bucket.key] !== bucket.quota && (
+                                              <span className="text-purple-500 font-semibold"> · entrando {sampledSelection.perBucketSelected[bucket.key]}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          <button
+                                            type="button"
+                                            aria-label={`Diminuir quantidade de ${bucket.shortLabel}`}
+                                            onClick={() => setItemQuotas(prev => ({ ...prev, [bucket.key]: Math.max(0, bucket.quota - 1) }))}
+                                            className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-[#303036] hover:bg-purple-600 hover:text-white text-xs font-black"
+                                          >
+                                            −
+                                          </button>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            max={bucket.maxCount}
+                                            aria-label={`Quantidade de questões para ${bucket.shortLabel}`}
+                                            value={bucket.quota}
+                                            onChange={e => {
+                                              const val = e.target.value === '' ? 0 : Math.max(0, Math.min(bucket.maxCount, Math.floor(Number(e.target.value) || 0)));
+                                              setItemQuotas(prev => ({ ...prev, [bucket.key]: val }));
+                                            }}
+                                            className="w-14 h-7 rounded-lg bg-white dark:bg-[#16161a] border border-gray-300 dark:border-[#3e3e46] text-xs font-bold text-center outline-none focus:border-purple-500"
+                                          />
+                                          <button
+                                            type="button"
+                                            aria-label={`Aumentar quantidade de ${bucket.shortLabel}`}
+                                            onClick={() => setItemQuotas(prev => ({ ...prev, [bucket.key]: Math.min(bucket.maxCount, bucket.quota + 1) }))}
+                                            className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-[#303036] hover:bg-purple-600 hover:text-white text-xs font-black"
+                                          >
+                                            +
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setItemQuotas(prev => { const next = { ...prev }; delete next[bucket.key]; return next; })}
+                                            className="px-2 h-7 rounded-lg text-[10px] font-bold text-purple-500 hover:bg-purple-500/10"
+                                          >
+                                            Tudo
+                                          </button>
+                                          <button
+                                            type="button"
+                                            aria-label={`Remover ${bucket.shortLabel}`}
+                                            onClick={() => {
+                                              if (bucket.key.startsWith('spec::')) toggleSpecialtyFilter(bucket.key.slice(6), false);
+                                              else toggleLeafFilterKey(bucket.key, false);
+                                            }}
+                                            className="w-7 h-7 rounded-lg text-gray-400 hover:text-red-400 text-xs font-bold"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="pt-2 border-t border-gray-200 dark:border-[#2e2e2e] flex flex-col gap-2.5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 mr-1">Limite total do simulado:</span>
+                                        {['', '10', '20', '30', '50', '100'].map(preset => (
+                                          <button
+                                            key={preset || 'all'}
+                                            type="button"
+                                            onClick={() => setGlobalLimit(preset)}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                                              String(globalLimit) === preset
+                                                ? 'bg-purple-600 border-purple-500 text-white'
+                                                : 'bg-gray-100 dark:bg-[#242429] border-gray-200 dark:border-[#36363d] text-gray-700 dark:text-gray-300 hover:border-purple-500'
+                                            }`}
+                                          >
+                                            {preset || 'Tudo'}
+                                          </button>
+                                        ))}
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          value={globalLimit}
+                                          onChange={e => setGlobalLimit(e.target.value)}
+                                          placeholder="Outra"
+                                          aria-label="Limite total de questões do simulado"
+                                          className="w-16 px-2 py-1 rounded-lg bg-gray-100 dark:bg-[#242429] border border-gray-300 dark:border-[#3c3c44] text-xs font-bold text-center outline-none focus:border-purple-500"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setSampleSeed(s => s + 1)}
+                                        className="text-[11px] font-bold text-purple-500 hover:underline"
+                                      >
+                                        ↻ Sortear outra amostra
+                                      </button>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-gray-600 dark:text-gray-300">
+                                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="checkbox" checked={prioritizeUnanswered} onChange={e => setPrioritizeUnanswered(e.target.checked)} className="accent-purple-600" />
+                                        <span>Priorizar não respondidas</span>
+                                      </label>
+                                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="checkbox" checked={shuffleQuestions} onChange={e => setShuffleQuestions(e.target.checked)} className="accent-purple-600" />
+                                        <span>Embaralhar questões</span>
+                                      </label>
+                                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="checkbox" checked={includeCompletedFallback} onChange={e => setIncludeCompletedFallback(e.target.checked)} className="accent-purple-600" />
+                                        <span>Incluir já concluídas se necessário</span>
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-xs text-gray-600 dark:text-gray-300">
+                                  <b className="text-purple-500">{sampledSelection.ids.length}</b> questão(ões) no simulado · {selectedSpecialties.length} especialidade(s) · {selectedFilterKeys.length} tema(s)/tag(s)
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={!sampledSelection.ids.length}
+                                  onClick={() => {
+                                    const desc = selectedBuckets.map(b => `${b.shortLabel} (${sampledSelection.perBucketSelected[b.key] ?? b.quota})`).join(' · ');
+                                    openBancoFilteredSelection(
+                                      sampledSelection.ids,
+                                      `Simulado personalizado · ${sampledSelection.ids.length} questões`,
+                                      desc,
+                                      { allowCompletedReview:true, forceNewEntry:true }
+                                    );
+                                  }}
+                                  className="rounded-xl px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black disabled:opacity-40 transition-colors"
+                                >
+                                  Criar e iniciar simulado ({sampledSelection.ids.length} {sampledSelection.ids.length === 1 ? 'questão' : 'questões'})
+                                </button>
+                              </div>
                             </>
                           )}
                         </section>
+
                         <div className="flex items-center justify-between gap-3"><h2 className="text-base font-black">Provas cadastradas</h2><span className="text-xs text-gray-500">{visibleExams.length} de {exams.length}</span></div>
                         <div className="flex flex-col gap-3">
                           {visibleExams.map(exam => {
                             const ids = exam.questions.map(q => String(q.id));
+                            const filteredIds = (exam.filteredQuestions || exam.questions).map(q => String(q.id));
                             const done = ids.filter(id => completed.has(id)).length;
                             const pending = Math.max(0, ids.length - done);
                             const entryId = `exam:${exam.id}`;
@@ -6352,9 +7759,9 @@
                             const pct = ids.length ? Math.round(done / ids.length * 100) : 0;
                             const taggedCount = exam.questions.filter(q => q.temaClassificado === true || getBancoQuestionTags(q).length > 0).length;
                             return <section key={exam.id} className="rounded-2xl border border-gray-200 dark:border-[#303030] bg-white dark:bg-[#1A1A1A] p-4 sm:p-5 shadow-sm">
-                              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="text-base sm:text-lg font-black break-words">{exam.title}</h2><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{exam.specialty || 'Especialidade não informada'}{exam.institution ? ` · ${exam.institution}` : ''}{exam.year ? ` · ${exam.year}` : ''}</p><p className="mt-1 text-[10px] text-gray-400">{taggedCount} questões classificadas com tags</p></div><span className="shrink-0 rounded-lg px-2 py-1 bg-purple-500/10 text-purple-500 text-xs font-black">{ids.length} questões</span></div>
+                              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="text-base sm:text-lg font-black break-words">{exam.title}</h2><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{exam.specialty || 'Especialidade não informada'}{exam.institution ? ` · ${exam.institution}` : ''}{exam.year ? ` · ${exam.year}` : ''}</p><p className="mt-1 text-[10px] text-gray-400">{taggedCount} questões classificadas com tags</p></div><div className="flex flex-col items-end gap-1 shrink-0"><span className="rounded-lg px-2 py-1 bg-purple-500/10 text-purple-500 text-xs font-black">{ids.length} questões</span>{hasActiveExamFilter && filteredIds.length > 0 && filteredIds.length < ids.length && <span className="rounded-lg px-2 py-0.5 bg-emerald-500/15 text-emerald-500 text-[10px] font-black">{filteredIds.length} de {ids.length} filtradas</span>}</div></div>
                               <div className="mt-4 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400"><span>{done}/{ids.length} concluídas</span><span>{pct}%</span></div><div className="h-2 rounded-full bg-gray-200 dark:bg-[#303030] overflow-hidden mt-2"><div className="h-full bg-green-500 rounded-full" style={{width:`${pct}%`}} /></div>
-                              <div className="flex flex-wrap gap-2 mt-4"><button onClick={() => openBancoExam(exam, false)} disabled={!pending && !isActive && !hasSaved} className="flex-1 min-w-[170px] rounded-xl py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-black">{isActive || hasSaved ? 'Continuar prova' : pending ? `Fazer prova · ${pending} pendentes` : 'Prova concluída'}</button><button onClick={() => openBancoExam(exam, true)} className="rounded-xl py-3 px-4 border border-gray-300 dark:border-[#444] text-sm font-bold">Revisar prova completa</button></div>
+                              <div className="flex flex-wrap gap-2 mt-4">{hasActiveExamFilter && filteredIds.length > 0 && filteredIds.length < ids.length && <button type="button" onClick={() => openBancoFilteredSelection(filteredIds, `${exam.title} (Filtrado · ${filteredIds.length} q.)`, `${exam.institution || ''} · ${filteredIds.length} questões filtradas`, { allowCompletedReview:true, forceNewEntry:true })} className="rounded-xl py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black">Fazer só as {filteredIds.length} filtradas</button>}<button onClick={() => openBancoExam(exam, false)} disabled={!pending && !isActive && !hasSaved} className="flex-1 min-w-[170px] rounded-xl py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-black">{isActive || hasSaved ? 'Continuar prova' : pending ? `Fazer prova · ${pending} pendentes` : 'Prova concluída'}</button><button onClick={() => openBancoExam(exam, true)} className="rounded-xl py-3 px-4 border border-gray-300 dark:border-[#444] text-sm font-bold">Revisar prova completa</button></div>
                             </section>;
                           })}
                           {!visibleExams.length && <div className="rounded-2xl bg-white dark:bg-[#1A1A1A] p-8 text-center text-sm text-gray-500">Nenhuma prova corresponde à pesquisa e aos filtros.</div>}
@@ -7813,38 +9220,31 @@
             const [activeVideoSession, setActiveVideoSession] = useState(null); // { videos, index, sourceLabel }
             const [activePdfModal, setActivePdfModal] = useState(null); // { id, title, subtitle }
             const [playerMode, setPlayerMode] = useState(() => {
-              try { return localStorage.getItem('hfoqo_aulas_player_mode_v1') === 'hd' ? 'hd' : 'drive'; }
+              try { return localStorage.getItem('hfoqo_aulas_player_mode_v3') === 'native' ? 'native' : 'drive'; }
               catch { return 'drive'; }
             });
-            const [hdAttempt, setHdAttempt] = useState(0);
-            const [hdNotice, setHdNotice] = useState('');
-            const [playbackRate, setPlaybackRate] = useState(1);
+            const [playbackRate, setPlaybackRate] = useState(() => {
+              try {
+                const v = Number(localStorage.getItem('hfoqo_aulas_playback_rate_v1'));
+                return [1, 1.25, 1.5, 1.75, 2].includes(v) ? v : 1;
+              } catch { return 1; }
+            });
             const [cinemaMode, setCinemaMode] = useState(false);
             const [mobilePlayerTab, setMobilePlayerTab] = useState('controls'); // 'controls' | 'playlist'
-            const hdVideoRef = React.useRef(null);
             const trilhaRailRef = React.useRef(null);
             const dropdownWrapRef = React.useRef(null);
 
-            const currentModalVideoId = activeVideoSession?.videos?.[activeVideoSession.index]?.id || '';
-
             useEffect(() => {
-              try { localStorage.setItem('hfoqo_aulas_player_mode_v1', playerMode); } catch {}
+              try { localStorage.setItem('hfoqo_aulas_player_mode_v3', playerMode); } catch {}
             }, [playerMode]);
 
             useEffect(() => {
-              setHdAttempt(0);
-              setHdNotice('');
-            }, [currentModalVideoId]);
+              try { localStorage.setItem('hfoqo_aulas_playback_rate_v1', String(playbackRate)); } catch {}
+            }, [playbackRate]);
 
             useEffect(() => {
               if (!activeVideoSession) setMobilePlayerTab('controls');
             }, [Boolean(activeVideoSession)]);
-
-            useEffect(() => {
-              if (playerMode === 'hd' && hdVideoRef.current) {
-                try { hdVideoRef.current.playbackRate = playbackRate; } catch {}
-              }
-            }, [playbackRate, playerMode, currentModalVideoId]);
 
             const specialties = Array.isArray(aulasCatalog?.specialties) ? aulasCatalog.specialties : [];
             const globalPdfs = Array.isArray(aulasCatalog?.globalPdfs) ? aulasCatalog.globalPdfs : [];
@@ -8136,172 +9536,140 @@
                 }
               };
 
-              return (
-                <>
-                  {activeVideoSession && currentVideo && (
-                    <div className="fixed inset-0 z-[260000] bg-black/85 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" role="dialog" aria-modal="true">
-                      <div className="w-full max-w-7xl h-[100dvh] sm:h-[92dvh] rounded-none sm:rounded-3xl bg-[#121216] border border-white/10 text-white shadow-2xl flex flex-col overflow-hidden">
-                        {/* Top Bar do Player */}
-                        <div
-                          className="px-3 sm:px-6 py-3 sm:py-3.5 border-b border-white/10 bg-[#18181d] flex items-center justify-between gap-2 sm:gap-3 shrink-0"
-                          style={{ paddingTop: 'calc(0.75rem + var(--hfoqo-safe-top, 0px))' }}
+              const videoPlayerModalEl = activeVideoSession && currentVideo ? (
+                <div className="fixed inset-0 z-[260000] bg-black/90 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" role="dialog" aria-modal="true" data-hz-portal-modal="video">
+                  <div
+                    className="w-full max-w-7xl h-[100dvh] sm:h-[92dvh] rounded-none sm:rounded-3xl bg-[#121216] border border-white/10 text-white shadow-2xl flex flex-col overflow-hidden"
+                    style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+                  >
+                    {/* Top Bar do Player (respeita Dynamic Island do iPhone e nunca fica atrás do Header) */}
+                    <div
+                      className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-white/10 bg-[#18181d] flex items-center justify-between gap-2 sm:gap-3 shrink-0"
+                      style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), var(--hfoqo-safe-top, 0px), 12px)' }}
+                    >
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setActiveVideoSession(null)}
+                          aria-label="Voltar"
+                          className="sm:hidden w-11 h-11 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center shrink-0 transition-colors"
                         >
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                            <span className="px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-black uppercase bg-purple-600/25 text-purple-300 border border-purple-500/30 shrink-0">
-                              {currentVideo.shortTag || 'IMERSÃO'}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="text-[11px] sm:text-xs text-gray-400 truncate">
-                                {activeVideoSession.sourceLabel} · Aula {String(activeVideoSession.index + 1).padStart(2, '0')} de {String(activeVideoSession.videos.length).padStart(2, '0')}
-                              </div>
-                              <div className="text-xs sm:text-base font-bold text-white truncate">{currentVideo.title}</div>
-                            </div>
+                          <Icons.ChevronLeft />
+                        </button>
+                        <span className="hidden sm:inline-flex px-2.5 py-1 rounded-lg text-[11px] font-black uppercase bg-purple-600/25 text-purple-300 border border-purple-500/30 shrink-0">
+                          {currentVideo.shortTag || 'IMERSÃO'}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-[11px] sm:text-xs text-gray-400 truncate">
+                            {activeVideoSession.sourceLabel} · Aula {String(activeVideoSession.index + 1).padStart(2, '0')} de {String(activeVideoSession.videos.length).padStart(2, '0')}
                           </div>
-                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                            <div className="inline-flex p-0.5 rounded-xl bg-white/10 border border-white/10" role="group" aria-label="Qualidade e modo do player">
-                              <button
-                                type="button"
-                                onClick={() => { setPlayerMode('drive'); setHdNotice(''); }}
-                                title="Player padrão do Google Drive (ajuste na engrenagem ⚙ → 720p/1080p)"
-                                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playerMode === 'drive' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
-                              >
-                                Drive
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setPlayerMode('hd'); setHdAttempt(0); setHdNotice(''); }}
-                                title="Streaming direto do MP4 original em Full HD 1080p (requer pasta pública via link)"
-                                className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playerMode === 'hd' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
-                              >
-                                HD 1080p
-                              </button>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setCinemaMode(v => !v)}
-                              className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
-                                cinemaMode
-                                  ? 'bg-purple-600/25 border-purple-500 text-purple-200'
-                                  : 'bg-white/10 border-white/10 text-gray-200 hover:bg-white/15'
-                              }`}
-                              title={cinemaMode ? 'Mostrar lista de aulas ao lado' : 'Expandir vídeo em modo cinema'}
-                            >
-                              {cinemaMode ? 'Playlist' : 'Expandir'}
-                            </button>
-                            <span className={`hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                              isCompleted
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : 'bg-amber-400/20 text-amber-300 border-amber-400/40'
-                            }`}>
-                              {isCompleted ? '✓ Concluído' : '● Assistindo'}
-                            </span>
-                            <a
-                              href={`https://drive.google.com/file/d/${currentVideo.id}/view`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-gray-200 transition-colors"
-                              title="Abrir vídeo diretamente no Google Drive"
-                            >
-                              <Icons.ExternalLink /> <span className="hidden md:inline">Abrir no Drive</span>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => setActiveVideoSession(null)}
-                              aria-label="Fechar player"
-                              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-red-500/30 text-gray-200 flex items-center justify-center transition-colors"
-                            >
-                              <Icons.X />
-                            </button>
-                          </div>
+                          <div className="text-xs sm:text-base font-bold text-white truncate">{currentVideo.title}</div>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                        <div className="inline-flex p-0.5 rounded-xl bg-white/10 border border-white/10" role="group" aria-label="Modo do player">
+                          <button
+                            type="button"
+                            onClick={() => setPlayerMode('drive')}
+                            title="Player oficial do Google Drive (recomendado)"
+                            className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playerMode === 'drive' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                          >
+                            Drive
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPlayerMode('native')}
+                            title="Player alternativo do site (requer pasta pública por link)"
+                            className={`px-2 sm:px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playerMode === 'native' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-300 hover:text-white'}`}
+                          >
+                            Player HZ
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCinemaMode(v => !v)}
+                          className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                            cinemaMode
+                              ? 'bg-purple-600/25 border-purple-500 text-purple-200'
+                              : 'bg-white/10 border-white/10 text-gray-200 hover:bg-white/15'
+                          }`}
+                          title={cinemaMode ? 'Mostrar lista de aulas ao lado' : 'Expandir vídeo em modo cinema'}
+                        >
+                          {cinemaMode ? 'Playlist' : 'Expandir'}
+                        </button>
+                        <span className={`hidden xl:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                          isCompleted
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                        }`}>
+                          {isCompleted ? '✓ Concluído' : '● Assistindo'}
+                        </span>
+                        <a
+                          href={`https://drive.google.com/file/d/${currentVideo.id}/view`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-gray-200 transition-colors"
+                          title="Abrir vídeo diretamente no Google Drive"
+                        >
+                          <Icons.ExternalLink /> <span className="hidden md:inline">Abrir no Drive</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setActiveVideoSession(null)}
+                          aria-label="Fechar player"
+                          className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-red-500/30 text-gray-200 flex items-center justify-center transition-colors"
+                        >
+                          <Icons.X />
+                        </button>
+                      </div>
+                    </div>
 
-                        {/* Corpo Principal: Streamer + Sidebar Playlist */}
-                        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-                          {/* Coluna Vídeo + Controles */}
-                          <div className={`flex-1 min-h-0 flex flex-col p-3 sm:p-5 overflow-y-auto ${cinemaMode ? 'items-center' : ''}`}>
-                            <div className={`w-full ${cinemaMode ? 'max-w-5xl' : ''} flex flex-col`}>
-                              <div className="w-full aspect-video max-h-[42dvh] sm:max-h-[58dvh] lg:max-h-[65dvh] bg-black rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 shadow-xl shrink-0 relative">
-                                {playerMode === 'hd' ? (
-                                  <video
-                                    ref={hdVideoRef}
-                                    key={`hd_${currentVideo.id}_${hdAttempt}`}
-                                    src={
-                                      hdAttempt === 0
-                                        ? `https://drive.usercontent.google.com/download?id=${encodeURIComponent(currentVideo.id)}&export=download&confirm=t`
-                                        : `https://drive.google.com/uc?export=download&id=${encodeURIComponent(currentVideo.id)}`
-                                    }
-                                    controls
-                                    autoPlay
-                                    playsInline
-                                    preload="auto"
-                                    onLoadedMetadata={() => {
-                                      if (hdVideoRef.current) {
-                                        try { hdVideoRef.current.playbackRate = playbackRate; } catch {}
-                                      }
-                                      setHdNotice('');
-                                    }}
-                                    onEnded={() => {
-                                      updateVideoWatchState(currentVideo, 'completed', {
-                                        force: true,
-                                        specialtyId: currentVideo.specialtyId,
-                                        specialtyName: currentVideo.specialtyName,
-                                        folderId: currentVideo.folderId,
-                                        folderName: currentVideo.folderName
-                                      });
-                                    }}
-                                    onError={() => {
-                                      if (hdAttempt === 0) {
-                                        setHdAttempt(1);
-                                      } else {
-                                        setPlayerMode('drive');
-                                        setHdNotice('O modo HD 1080p direto exige que a pasta "HZ MED - Aulas" no Drive esteja compartilhada como "Qualquer pessoa com o link (Leitor)" (e vídeos até ~100 MB). No player do Drive abaixo, clique na engrenagem ⚙ → Qualidade → 720p/1080p assim que o Drive finalizar o processamento HD.');
-                                      }
-                                    }}
-                                    className="w-full h-full bg-black object-contain"
-                                  />
-                                ) : (
-                                  <iframe
-                                    key={`drive_${currentVideo.id}`}
-                                    src={`https://drive.google.com/file/d/${encodeURIComponent(currentVideo.id)}/preview`}
-                                    title={currentVideo.title}
-                                    className="w-full h-full border-0"
-                                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                                    allowFullScreen
-                                  />
-                                )}
-                              </div>
+                    {/* Corpo Principal: Streamer + Sidebar Playlist */}
+                    <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+                      {/* Coluna Vídeo + Controles */}
+                      <div className={`flex-1 min-h-0 flex flex-col p-3 sm:p-5 overflow-y-auto ${cinemaMode ? 'items-center' : ''}`}>
+                        <div className={`w-full ${cinemaMode ? 'max-w-5xl' : ''} flex flex-col`}>
+                          <div className="w-full aspect-video max-h-[42dvh] sm:max-h-[58dvh] lg:max-h-[65dvh] bg-black rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 shadow-xl shrink-0 relative">
+                            {playerMode === 'native' ? (
+                              <NativeHzVideoPlayer
+                                video={currentVideo}
+                                driveApiKey={aulasCatalog?.driveApiKey || ''}
+                                isPublicLink={aulasCatalog?.isPublicLink}
+                                initialTime={videoMap[String(currentVideo.id)]?.lastTime || 0}
+                                playbackRate={playbackRate}
+                                onPlaybackRateChange={setPlaybackRate}
+                                onProgressTime={(sec) => updateVideoTimestamp(currentVideo.id, sec)}
+                                onCompleted={() => updateVideoWatchState(currentVideo, 'completed', {
+                                  force: true,
+                                  specialtyId: currentVideo.specialtyId,
+                                  specialtyName: currentVideo.specialtyName,
+                                  folderId: currentVideo.folderId,
+                                  folderName: currentVideo.folderName
+                                })}
+                                onEnablePublicLink={enableAulasPublicAccess}
+                                enablingPublicLink={enablingPublicLink}
+                                onSwitchToDriveIframe={() => setPlayerMode('drive')}
+                              />
+                            ) : (
+                              <iframe
+                                key={`drive_${currentVideo.id}`}
+                                src={`https://drive.google.com/file/d/${encodeURIComponent(currentVideo.id)}/preview`}
+                                title={currentVideo.title}
+                                className="w-full h-full border-0"
+                                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                                allowFullScreen
+                              />
+                            )}
+                          </div>
 
-                              {hdNotice && (
-                                <div className="mt-2.5 px-3.5 py-2.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-200 text-xs flex items-start justify-between gap-2">
-                                  <span>{hdNotice}</span>
-                                  <button type="button" onClick={() => setHdNotice('')} className="shrink-0 opacity-75 hover:opacity-100"><Icons.X /></button>
-                                </div>
-                              )}
-
-                              <div className="mt-2 text-[11px] text-gray-400 flex items-center justify-between gap-2 flex-wrap">
-                                <span>
-                                  {playerMode === 'hd'
-                                    ? 'Modo HD 1080p original · Marcará como concluída automaticamente ao chegar no fim.'
-                                    : 'Dica de qualidade: no player do Drive, clique na engrenagem ⚙ → Qualidade → 720p/1080p (vídeos recém-enviados liberam HD após o Drive processar) ou clique em HD 1080p acima.'}
-                                </span>
-                                {currentVideo.theme && <span className="text-purple-300 font-semibold">Subtema: {currentVideo.theme}</span>}
-                              </div>
-
-                              {playerMode === 'hd' && (
-                                <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[11px] text-gray-400 font-bold mr-1">Velocidade:</span>
-                                  {[1, 1.25, 1.5, 1.75, 2].map(rate => (
-                                    <button
-                                      key={rate}
-                                      type="button"
-                                      onClick={() => setPlaybackRate(rate)}
-                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors ${playbackRate === rate ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/15'}`}
-                                    >
-                                      {rate}x
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
+                          <div className="mt-2 text-[11px] text-gray-400 flex items-center justify-between gap-2 flex-wrap">
+                            <span>
+                              {playerMode === 'drive'
+                                ? 'Player Google Drive (padrão): se o navegador pedir cookies de terceiros ou login na 1ª vez, permita uma única vez e os próximos vídeos abrirão normalmente.'
+                                : 'Modo Player HZ alternativo: toca diretamente sem cookies se a pasta do Drive estiver liberada via link.'}
+                            </span>
+                            {currentVideo.theme && <span className="text-purple-300 font-semibold">Subtema: {currentVideo.theme}</span>}
+                          </div>
 
                               {/* Abas mobile/tablet: alternar entre Controles & PDFs e Playlist sem dupla rolagem apertada */}
                               <div className="mt-3 lg:hidden grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#1a1a21] border border-white/10">
@@ -8478,7 +9846,11 @@
                         </div>
                       </div>
                     </div>
-                  )}
+                  ) : null;
+
+              return (
+                <>
+                  {videoPlayerModalEl && (typeof createPortal === 'function' ? createPortal(videoPlayerModalEl, document.body) : videoPlayerModalEl)}
 
                   {activePdfModal && (
                     <NativePdfReaderModal
@@ -11249,6 +12621,26 @@
           const StableMetricasView = useStableNestedComponent(MetricasView);
           const StableQuestionView = useStableNestedComponent(QuestionView);
 
+          if (authChecking) {
+            return (
+              <div className="min-h-screen min-h-[100dvh] h-[100dvh] w-full flex items-center justify-center px-4 bg-[#070814] text-white select-none">
+                <div className="text-center space-y-4">
+                  <img
+                    src="/hz-med-icon-192.png?v=20261126-logo"
+                    alt="HZ MED"
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.35)] border border-purple-400/30 mx-auto object-cover"
+                  />
+                  <div className="text-2xl font-black tracking-tight">
+                    BQ<span className="text-purple-400">H</span>Z
+                  </div>
+                  <div className="text-xs sm:text-sm text-purple-200/80 animate-pulse font-semibold">
+                    Verificando sessão segura…
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
           if (!isLoggedIn) {
             return (
               <div className="min-h-screen min-h-[100dvh] h-[100dvh] w-full overflow-y-auto overscroll-contain flex items-center justify-center px-4 py-6 sm:px-6 md:py-10 bg-[#070814] text-white relative select-none" style={{paddingTop:'max(1.5rem, env(safe-area-inset-top, 0px))', paddingBottom:'max(1.5rem, env(safe-area-inset-bottom, 0px))', boxSizing:'border-box'}}>
@@ -11264,18 +12656,11 @@
                   <div className="rounded-[32px] p-6 sm:p-8 md:p-9 bg-[#111322]/90 backdrop-blur-2xl border border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.65),0_0_40px_rgba(147,51,234,0.12)] transition-all">
                     {/* Identidade visual HZ MED / BQHZ */}
                     <div className="text-center mb-6 sm:mb-7">
-                      <div className="inline-flex items-center justify-center w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-purple-500/25 via-purple-600/15 to-fuchsia-500/20 border border-purple-400/30 shadow-[0_0_30px_rgba(168,85,247,0.25)] mb-4">
-                        <svg className="w-9 h-9 text-purple-300" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-                          <path d="M8 34h9l5-12 7 24 7-30 6 18h14" stroke="url(#hzLoginGrad)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                          <defs>
-                            <linearGradient id="hzLoginGrad" x1="8" y1="16" x2="56" y2="46" gradientUnits="userSpaceOnUse">
-                              <stop stopColor="#e879f9" />
-                              <stop offset="0.5" stopColor="#a855f7" />
-                              <stop offset="1" stopColor="#6366f1" />
-                            </linearGradient>
-                          </defs>
-                        </svg>
-                      </div>
+                      <img
+                        src="/hz-med-icon-192.png?v=20261126-logo"
+                        alt="HZ MED"
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.35)] border border-purple-400/30 mx-auto mb-4 object-cover"
+                      />
                       <div className="text-3xl sm:text-4xl font-black tracking-tight text-white">
                         BQ<span className="bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500 bg-clip-text text-transparent">H</span>Z
                       </div>
@@ -11337,10 +12722,11 @@
 
                         <button
                           type="submit"
-                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 via-purple-500 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 active:scale-[0.99] text-white font-black text-base sm:text-lg shadow-[0_10px_30px_rgba(147,51,234,0.35)] transition-all flex items-center justify-center gap-2"
+                          disabled={authSubmitting}
+                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 via-purple-500 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 active:scale-[0.99] disabled:opacity-60 text-white font-black text-base sm:text-lg shadow-[0_10px_30px_rgba(147,51,234,0.35)] transition-all flex items-center justify-center gap-2"
                         >
-                          <span>Entrar no BQHZ</span>
-                          <span aria-hidden="true">→</span>
+                          <span>{authSubmitting ? 'Verificando…' : 'Entrar no BQHZ'}</span>
+                          {!authSubmitting && <span aria-hidden="true">→</span>}
                         </button>
 
                       </form>
@@ -11377,10 +12763,11 @@
 
                         <button
                           type="submit"
-                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 active:scale-[0.99] text-white font-black text-base sm:text-lg shadow-[0_10px_30px_rgba(99,102,241,0.35)] transition-all flex items-center justify-center gap-2"
+                          disabled={authSubmitting}
+                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-600 hover:from-indigo-500 hover:to-fuchsia-500 active:scale-[0.99] disabled:opacity-60 text-white font-black text-base sm:text-lg shadow-[0_10px_30px_rgba(99,102,241,0.35)] transition-all flex items-center justify-center gap-2"
                         >
-                          <span>Acessar Banco de Dados</span>
-                          <span aria-hidden="true">→</span>
+                          <span>{authSubmitting ? 'Verificando…' : 'Acessar Banco de Dados'}</span>
+                          {!authSubmitting && <span aria-hidden="true">→</span>}
                         </button>
 
                       </form>
