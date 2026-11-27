@@ -400,7 +400,10 @@
     <div class="panel p-4 md:p-5">
       <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
         <div><div class="text-xl font-black">Biblioteca de Resumos · Editor rico</div><p class="text-sm muted mt-1">Crie resumos como em um editor de texto: tópicos, caixas coloridas, imagens, tabelas, listas, links e formatação. O conteúdo será exibido na Biblioteca de Resumos do HZ MED.</p></div>
-        <span class="pill">HTML RICO · HZ MED</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="btn secondary text-xs py-2 px-3" id="scrollToDrivePdfUploaderBtn">📁 Anexar Pasta / PDFs (Drive)</button>
+          <span class="pill">HTML RICO · HZ MED</span>
+        </div>
       </div>
       <div class="grid two gap-3 mb-4" style="grid-template-columns:1.4fr .6fr">
         <label class="block"><span class="meta block mb-2">Título do resumo</span><input id="summaryTitle" class="field" placeholder="Ex.: Tromboembolismo pulmonar"></label>
@@ -440,6 +443,82 @@
         <div id="summaryList" class="space-y-2 max-h-[660px] overflow-y-auto pr-1"></div>
       </section>
     </div>
+
+    <section class="panel p-4 md:p-5" id="drivePdfUploaderPanel">
+      <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <div class="text-lg font-black">Anexar Pasta inteira ou PDFs em Materiais PDF (Google Drive)</div>
+          <p class="tiny muted mt-1">Escolha uma pasta já existente no sistema (<strong>Material de Apoio</strong> ou qualquer Especialidade/subpasta) ou crie uma nova pasta dentro dela. Ao anexar uma pasta do computador, todas as subpastas internas são preservadas no menu retrátil do Imersão Videoaulas.</p>
+        </div>
+        <button type="button" class="btn secondary" id="reloadDrivePdfFolders">↻ Atualizar pastas do Drive</button>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="rounded-xl p-3.5 border border-slate-700/70 bg-slate-950/40">
+          <label for="drivePdfTargetFolder" class="block text-xs font-extrabold uppercase tracking-wide muted mb-1.5">1. Pasta de destino no sistema</label>
+          <select id="drivePdfTargetFolder" class="field">
+            <option value="">Clique em "Atualizar pastas do Drive" para carregar...</option>
+          </select>
+
+          <label class="inline-flex items-center gap-2 text-xs font-bold mt-3 cursor-pointer select-none">
+            <input type="checkbox" id="drivePdfCreateNewFolder" class="accent-violet-500">
+            <span>Criar nova pasta dentro da pasta selecionada</span>
+          </label>
+          <div id="drivePdfNewFolderWrap" class="hidden mt-2">
+            <input id="drivePdfNewFolderName" class="field" placeholder="Ex.: Semiologia  ou  Semiologia / Semiologia Cardiovascular">
+            <div class="tiny muted mt-1">Dica: use <strong>/</strong> para criar subpastas de uma só vez antes da pasta escolhida no computador.</div>
+          </div>
+
+          <div id="drivePdfDestPreview" class="mt-3 rounded-lg px-3 py-2 text-xs border border-violet-500/30 bg-violet-950/20 text-violet-100">
+            Destino final: aguardando carregamento das pastas do Drive…
+          </div>
+        </div>
+
+        <div class="rounded-xl p-3.5 border border-slate-700/70 bg-slate-950/40">
+          <div class="text-xs font-extrabold uppercase tracking-wide muted mb-2">2. Selecionar Pasta ou PDFs do computador</div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="btn primary" id="drivePdfPickFolderBtn">📁 Selecionar pasta inteira do PC</button>
+            <button type="button" class="btn secondary" id="drivePdfPickFilesBtn">📄 Selecionar PDF(s) avulsos</button>
+            <button type="button" class="btn secondary" id="drivePdfClearQueueBtn">Limpar fila</button>
+          </div>
+
+          <div class="mt-3 space-y-2">
+            <label class="flex items-start gap-2 text-xs font-semibold cursor-pointer select-none">
+              <input type="checkbox" id="drivePdfIncludeRootFolder" class="accent-violet-500 mt-0.5" checked>
+              <span>Manter o nome da pasta principal selecionada no PC (ex.: selecionar a pasta <strong>Trauma</strong> cria <strong>Trauma / ...</strong> dentro do destino)</span>
+            </label>
+            <label class="flex items-start gap-2 text-xs font-semibold cursor-pointer select-none">
+              <input type="checkbox" id="drivePdfReplaceExisting" class="accent-violet-500 mt-0.5">
+              <span>Substituir PDF se já existir outro com o mesmo nome na pasta de destino</span>
+            </label>
+          </div>
+
+          <div class="tiny muted mt-3">
+            Limite técnico do envio web: até <strong>25 MB por PDF</strong> (arquivos entre 24–25 MB abrem em aba externa do Drive no site; acima de 25 MB devem ser colocados direto na pasta do Google Drive e depois sincronizados).
+          </div>
+        </div>
+      </div>
+
+      <div id="drivePdfStatus" class="status mt-3">Selecione uma pasta de destino e anexe sua pasta ou arquivos PDF.</div>
+
+      <div id="drivePdfTreePreview" class="hidden mt-3 rounded-xl border border-slate-700/70 bg-slate-950/60 p-3 max-h-[340px] overflow-y-auto space-y-1.5"></div>
+
+      <div id="drivePdfUploadProgress" class="hidden mt-3 rounded-xl border border-violet-500/40 bg-violet-950/25 p-3">
+        <div class="flex items-center justify-between gap-2 text-xs font-bold mb-1.5">
+          <span id="drivePdfUploadLabel">Preparando envio…</span>
+          <span id="drivePdfUploadPercent">0%</span>
+        </div>
+        <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+          <div id="drivePdfUploadBar" class="h-full bg-violet-500 transition-all duration-200" style="width:0%"></div>
+        </div>
+        <div id="drivePdfUploadDetail" class="tiny muted mt-1.5"></div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 mt-3">
+        <div id="drivePdfQueueSummary" class="tiny muted">Nenhum PDF na fila.</div>
+        <button type="button" class="btn success" id="drivePdfStartUploadBtn" disabled>⬆ Enviar PDFs para o Drive e atualizar site</button>
+      </div>
+    </section>
   </section>
 
   <section id="paneFlashcards" class="hidden space-y-5">
@@ -906,6 +985,8 @@ Conceito-chave: Sinais duros indicam exploração cirúrgica imediata.
 <input type="file" id="capTxtFile" accept=".txt,text/plain" multiple class="hidden">
 <input type="file" id="capPdfFile" accept=".pdf,application/pdf" multiple class="hidden">
 <input type="file" id="fcSheetFile" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
+<input type="file" id="drivePdfFolderInput" webkitdirectory directory multiple class="hidden">
+<input type="file" id="drivePdfFilesInput" accept=".pdf,application/pdf" multiple class="hidden">
 <script>
 'use strict';
 const API_URL='https://script.google.com/macros/s/AKfycbywMShtxXw8y7Ld3pHEFntwo7-kg4MQ6sYPBzMt9BMsbpIp0dD_y9C5MTUKdBP6pP7YtQ/exec';
@@ -945,7 +1026,7 @@ async function verifyEditorAuth(){
 }
 const ALLOWED_TAGS=new Set(['P','BR','DIV','SPAN','H1','H2','H3','H4','H5','H6','UL','OL','LI','TABLE','CAPTION','COLGROUP','COL','THEAD','TBODY','TFOOT','TR','TD','TH','IMG','STRONG','EM','B','I','U','S','SUP','SUB','A','MARK','BLOCKQUOTE','HR','SMALL','CODE','PRE','FONT','CENTER']);
 const REMOVE_CONTENT=new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','TEXTAREA','SELECT','OPTION','META','LINK','SVG','VIDEO','AUDIO']);
-const state={drafts:[],index:0,exams:[],openDbExams:new Set(),dbLoaded:false,editingExamId:'',editingQuestionId:'',editingExam:null,previewAnswered:false,activeTab:'editor',lastEditor:null,loading:false,summaries:[],summariesLoaded:false,editingSummaryId:'',flashcards:[],flashcardsLoaded:false,editingFlashcardId:'',fcSelectedIds:new Set(),fcSheetParsed:[],fcOpenSpecs:new Set(),aulasVideos:[],aulasSpecialties:[],aulasUpdatesMeta:{},aulasUpdatesHtmlCache:{},aulasUpdatesLoaded:false,auFilterMode:'all',auClosedSpecs:new Set(),editingAulaVideo:null,auPreviewOpen:false,auLastTableCell:null,runtimeErrors:[],lastAudit:null};
+const state={drafts:[],index:0,exams:[],openDbExams:new Set(),dbLoaded:false,editingExamId:'',editingQuestionId:'',editingExam:null,previewAnswered:false,activeTab:'editor',lastEditor:null,loading:false,summaries:[],summariesLoaded:false,editingSummaryId:'',flashcards:[],flashcardsLoaded:false,editingFlashcardId:'',fcSelectedIds:new Set(),fcSheetParsed:[],fcOpenSpecs:new Set(),aulasVideos:[],aulasSpecialties:[],aulasUpdatesMeta:{},aulasUpdatesHtmlCache:{},aulasUpdatesLoaded:false,auFilterMode:'all',auClosedSpecs:new Set(),editingAulaVideo:null,auPreviewOpen:false,auLastTableCell:null,runtimeErrors:[],lastAudit:null,drivePdfFolders:[],drivePdfRootFolderId:'',drivePdfSupportRootId:'',drivePdfFoldersLoaded:false,drivePdfQueue:[],drivePdfUploading:false};
 const $=id=>document.getElementById(id);
 function status(message,type=''){const el=$('editorStatus');if(el){el.className='status mt-4'+(type?' '+type:'');el.textContent=message;}if(state.activeTab==='capturador')capStatus(message,type);}
 function capStatus(message,type=''){const el=$('capStatus');if(!el)return;el.className='status mt-3'+(type?' '+type:'');el.textContent=message;}
@@ -1737,7 +1818,7 @@ function deleteQuestion(examId,questionId){
     }
   });
 }
-function switchTab(tab){if(!getEditorSessionToken()){openEditorAuthGate('Faça login para acessar esta área.');return;}state.activeTab=tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab||(tab==='audit'&&x.dataset.tab==='database')));$('paneEditor').classList.toggle('hidden',tab!=='editor');$('paneCapturador').classList.toggle('hidden',tab!=='capturador');$('paneDatabase').classList.toggle('hidden',tab!=='database');$('paneAudit')?.classList.toggle('hidden',tab!=='audit');$('paneSummaries').classList.toggle('hidden',tab!=='summaries');$('paneFlashcards')?.classList.toggle('hidden',tab!=='flashcards');$('paneUpdates')?.classList.toggle('hidden',tab!=='updates');if(tab==='capturador'){renderCapturadorPreview();}if((tab==='database'||tab==='audit')&&!state.dbLoaded){loadRemoteDatabase();}else if(tab==='audit'){renderDatabaseAudit();}if(tab==='summaries'&&!state.summariesLoaded)loadRemoteSummaries();if(tab==='flashcards'&&!state.flashcardsLoaded)loadRemoteFlashcards();if(tab==='updates'&&!state.aulasUpdatesLoaded)loadAulasUpdatesTab();}
+function switchTab(tab){if(!getEditorSessionToken()){openEditorAuthGate('Faça login para acessar esta área.');return;}state.activeTab=tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab||(tab==='audit'&&x.dataset.tab==='database')));$('paneEditor').classList.toggle('hidden',tab!=='editor');$('paneCapturador').classList.toggle('hidden',tab!=='capturador');$('paneDatabase').classList.toggle('hidden',tab!=='database');$('paneAudit')?.classList.toggle('hidden',tab!=='audit');$('paneSummaries').classList.toggle('hidden',tab!=='summaries');$('paneFlashcards')?.classList.toggle('hidden',tab!=='flashcards');$('paneUpdates')?.classList.toggle('hidden',tab!=='updates');if(tab==='capturador'){renderCapturadorPreview();}if((tab==='database'||tab==='audit')&&!state.dbLoaded){loadRemoteDatabase();}else if(tab==='audit'){renderDatabaseAudit();}if(tab==='summaries'){if(!state.summariesLoaded)loadRemoteSummaries();if(!state.drivePdfFoldersLoaded)loadDrivePdfFolders();}if(tab==='flashcards'&&!state.flashcardsLoaded)loadRemoteFlashcards();if(tab==='updates'&&!state.aulasUpdatesLoaded)loadAulasUpdatesTab();}
 function addQuestion(){syncCurrentForm();state.editingExamId='';state.editingQuestionId='';state.editingExam=null;state.drafts.push(makeBlankQuestion(state.drafts.length+1));state.index=state.drafts.length-1;renderForm();status('Nova questão criada. Preencha os campos e salve.');}
 function changeQuestion(delta){syncCurrentForm();state.index=Math.max(0,Math.min(state.drafts.length-1,state.index+delta));renderForm();}
 function validateAll(){syncCurrentForm();const q=getCurrent();if(!q){status('Nenhuma questão selecionada.','warn');return;}const errors=validateQuestion(q);status(errors.length?'Faltam: '+errors.join(', '):'Enunciado, alternativas, gabarito e tema estão preenchidos. Confira o conteúdo antes de publicar.',errors.length?'warn':'ok');}
@@ -4469,6 +4550,393 @@ $('auInsertTemplateBtn')?.addEventListener('click',()=>{
 });
 $('auSaveBtn')?.addEventListener('click',saveCurrentAulaUpdate);
 $('auDeleteBtn')?.addEventListener('click',deleteCurrentAulaUpdate);
+
+// ==========================================
+// ENVIO DE PASTAS / PDFs PARA MATERIAIS PDF (DRIVE)
+// ==========================================
+const DRIVE_PDF_MAX_BYTES=25*1024*1024;
+const DRIVE_PDF_INLINE_READER_BYTES=24*1024*1024;
+
+function drivePdfFormatBytes(bytes){
+  const n=Number(bytes)||0;
+  if(n>=1024*1024)return (n/(1024*1024)).toFixed(2)+' MB';
+  if(n>=1024)return Math.round(n/1024)+' KB';
+  return n+' B';
+}
+
+function drivePdfStatusMsg(message,type=''){
+  const el=$('drivePdfStatus');
+  if(!el)return;
+  el.className='status mt-3'+(type?' '+type:'');
+  el.textContent=message;
+}
+
+function drivePdfParseNewFolderSegments(){
+  if(!$('drivePdfCreateNewFolder')?.checked)return [];
+  const raw=String($('drivePdfNewFolderName')?.value||'');
+  return raw.split(/[\\/]+/).map(s=>s.trim()).filter(s=>s&&s!=='.'&&s!=='..');
+}
+
+function drivePdfGetItemRelFolders(item){
+  if(!item)return [];
+  const raw=Array.isArray(item.rawRelativeFolders)?item.rawRelativeFolders:[];
+  if(!raw.length)return [];
+  if(item.fromFolderPick&&!$('drivePdfIncludeRootFolder')?.checked){
+    return raw.slice(1);
+  }
+  return raw.slice();
+}
+
+function drivePdfReadFileAsBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const res=String(reader.result||'');
+      const idx=res.indexOf(',');
+      resolve(idx>=0?res.slice(idx+1):res);
+    };
+    reader.onerror=()=>reject(new Error('Falha ao ler arquivo local: '+(file?.name||'')));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderDrivePdfFolderSelect(){
+  const sel=$('drivePdfTargetFolder');
+  if(!sel)return;
+  const previous=sel.value;
+  const list=Array.isArray(state.drivePdfFolders)?state.drivePdfFolders:[];
+  if(!list.length){
+    sel.innerHTML='<option value="">Nenhuma pasta carregada do Drive</option>';
+    return;
+  }
+  const support=list.filter(f=>f.group==='support');
+  const specs=list.filter(f=>f.group!=='support');
+  const buildOpts=items=>items.map(f=>{
+    const indent=f.depth>0?('— '.repeat(Math.min(4,f.depth))):'';
+    const text=indent+(f.label||f.name);
+    return `<option value="${esc(f.id)}">${esc(text)}</option>`;
+  }).join('');
+  let html='';
+  if(support.length)html+=`<optgroup label="Material de Apoio (Pasta pdfs / Complementar)">${buildOpts(support)}</optgroup>`;
+  if(specs.length)html+=`<optgroup label="Especialidades e Pastas de Aulas">${buildOpts(specs)}</optgroup>`;
+  sel.innerHTML=html;
+  const hasPrev=previous&&list.some(f=>String(f.id)===String(previous));
+  if(hasPrev){
+    sel.value=previous;
+  }else if(state.drivePdfSupportRootId&&list.some(f=>String(f.id)===String(state.drivePdfSupportRootId))){
+    sel.value=state.drivePdfSupportRootId;
+  }else if(list[0]?.id){
+    sel.value=list[0].id;
+  }
+}
+
+function updateDrivePdfDestPreview(){
+  const box=$('drivePdfDestPreview');
+  if(!box)return;
+  const selId=$('drivePdfTargetFolder')?.value||'';
+  const targetObj=(state.drivePdfFolders||[]).find(f=>String(f.id)===String(selId));
+  const newSegs=drivePdfParseNewFolderSegments();
+  if(!targetObj){
+    box.innerHTML='<strong>Destino final:</strong> '+(state.drivePdfFoldersLoaded?'selecione uma pasta acima.':'aguardando carregamento das pastas do Drive…');
+    return;
+  }
+  const baseLabel=targetObj.label||targetObj.name;
+  const fullPath=[baseLabel,...newSegs].join(' / ');
+  box.innerHTML=`<strong>Destino final no Drive:</strong> ${esc(fullPath)}${newSegs.length?' <span class="pill ml-1">+'+newSegs.length+' nova(s) pasta(s)</span>':''}`;
+}
+
+function renderDrivePdfQueuePreview(){
+  const tree=$('drivePdfTreePreview');
+  const summaryEl=$('drivePdfQueueSummary');
+  const startBtn=$('drivePdfStartUploadBtn');
+  if(!tree||!summaryEl||!startBtn)return;
+
+  const queue=Array.isArray(state.drivePdfQueue)?state.drivePdfQueue:[];
+  if(!queue.length){
+    tree.classList.add('hidden');
+    tree.innerHTML='';
+    summaryEl.textContent='Nenhum PDF na fila.';
+    startBtn.disabled=true;
+    return;
+  }
+
+  let validCount=0;
+  let blockedCount=0;
+  let largeReaderCount=0;
+  const groups=new Map();
+
+  queue.forEach((item,idx)=>{
+    const rel=drivePdfGetItemRelFolders(item);
+    const key=rel.length?rel.join(' / '):'(Direto na pasta de destino)';
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push({item,idx});
+    const sz=Number(item.size)||0;
+    if(sz<=0||sz>DRIVE_PDF_MAX_BYTES)blockedCount++;
+    else{
+      validCount++;
+      if(sz>DRIVE_PDF_INLINE_READER_BYTES)largeReaderCount++;
+    }
+  });
+
+  const sortedKeys=Array.from(groups.keys()).sort((a,b)=>{
+    if(a==='(Direto na pasta de destino)')return -1;
+    if(b==='(Direto na pasta de destino)')return 1;
+    return a.localeCompare(b,'pt-BR',{sensitivity:'base'});
+  });
+
+  tree.innerHTML=sortedKeys.map(folderKey=>{
+    const rows=groups.get(folderKey)||[];
+    const rowsHtml=rows.map(({item,idx})=>{
+      const sz=Number(item.size)||0;
+      let badge='';
+      if(sz<=0)badge='<span class="pill" style="background:rgba(239,68,68,.18);color:#fca5a5">Vazio · ignorado</span>';
+      else if(sz>DRIVE_PDF_MAX_BYTES)badge='<span class="pill" style="background:rgba(239,68,68,.18);color:#fca5a5">&gt;25 MB · bloqueado web</span>';
+      else if(sz>DRIVE_PDF_INLINE_READER_BYTES)badge='<span class="pill" style="background:rgba(245,158,11,.18);color:#fde68a">&gt;24 MB · aba externa</span>';
+      else badge='<span class="pill" style="background:rgba(16,185,129,.14);color:#6ee7b7">Pronto</span>';
+      return `<div class="flex flex-wrap items-center justify-between gap-2 py-1 px-2 rounded-lg bg-slate-900/70 text-xs">
+        <div class="min-w-0 flex-1 truncate"><span class="mr-1">📄</span><strong>${esc(item.name)}</strong> <span class="muted">(${esc(drivePdfFormatBytes(sz))})</span></div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          ${badge}
+          ${state.drivePdfUploading?'':`<button type="button" class="text-xs px-1.5 py-0.5 rounded bg-slate-800 hover:bg-red-950/60 text-slate-300" data-drive-pdf-remove="${idx}" title="Remover da fila">✕</button>`}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="rounded-lg border border-slate-800 bg-slate-900/40 p-2">
+      <div class="flex items-center justify-between gap-2 text-xs font-extrabold text-violet-200 mb-1.5">
+        <span>📂 ${esc(folderKey)}</span>
+        <span class="tiny muted font-semibold">${rows.length} PDF(s)</span>
+      </div>
+      <div class="space-y-1">${rowsHtml}</div>
+    </div>`;
+  }).join('');
+
+  tree.classList.remove('hidden');
+  const folderCount=sortedKeys.filter(k=>k!=='(Direto na pasta de destino)').length;
+  summaryEl.textContent=`${queue.length} PDF(s) em ${folderCount} subpasta(s) · ${validCount} pronto(s)${largeReaderCount?' · '+largeReaderCount+' >24 MB':''}${blockedCount?' · '+blockedCount+' ignorado(s) (>25 MB ou vazio)':''}`;
+  startBtn.disabled=state.drivePdfUploading||validCount===0;
+}
+
+function enqueueDrivePdfFiles(fileList,fromFolderPick){
+  const files=Array.from(fileList||[]);
+  if(!files.length)return;
+  let added=0;
+  let ignored=0;
+  const nextQueue=state.drivePdfQueue.slice();
+  const seenKeys=new Set(nextQueue.map(x=>x.dedupeKey));
+  files.forEach(file=>{
+    const name=String(file?.name||'').trim();
+    const isPdf=/\.pdf$/i.test(name)||String(file?.type||'').toLowerCase()==='application/pdf';
+    if(!isPdf||!name){
+      if(name)ignored++;
+      return;
+    }
+    const relRaw=String(file.webkitRelativePath||'').split('/').filter(Boolean);
+    const rawRelativeFolders=fromFolderPick&&relRaw.length>1?relRaw.slice(0,-1):[];
+    const dedupeKey=(fromFolderPick?'F:':'S:')+rawRelativeFolders.join('/')+'/'+name+'::'+file.size;
+    if(seenKeys.has(dedupeKey))return;
+    seenKeys.add(dedupeKey);
+    nextQueue.push({
+      id:'dpdf_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7),
+      dedupeKey,
+      file,
+      name,
+      size:Number(file.size)||0,
+      fromFolderPick:Boolean(fromFolderPick),
+      rawRelativeFolders
+    });
+    added++;
+  });
+  state.drivePdfQueue=nextQueue;
+  renderDrivePdfQueuePreview();
+  if(added>0){
+    drivePdfStatusMsg(`${added} PDF(s) adicionado(s) à fila.${ignored?' '+ignored+' arquivo(s) que não eram PDF foram ignorados.':''}`,'ok');
+  }else{
+    drivePdfStatusMsg(ignored?`Nenhum PDF novo encontrado (${ignored} arquivo(s) não-PDF ignorado(s)).`:'Esses PDFs já estão na fila.','warn');
+  }
+}
+
+async function loadDrivePdfFolders(){
+  const btn=$('reloadDrivePdfFolders');
+  if(btn)btn.disabled=true;
+  drivePdfStatusMsg('Carregando pastas do Google Drive…');
+  try{
+    const data=await apiCall('editorListDrivePdfFolders',{},60000);
+    state.drivePdfRootFolderId=String(data?.rootFolderId||'');
+    state.drivePdfSupportRootId=String(data?.supportRootId||'');
+    state.drivePdfFolders=Array.isArray(data?.folders)?data.folders:[];
+    state.drivePdfFoldersLoaded=true;
+    renderDrivePdfFolderSelect();
+    updateDrivePdfDestPreview();
+    drivePdfStatusMsg(`${state.drivePdfFolders.length} pasta(s) disponível(is) para receber PDFs.`,'ok');
+  }catch(e){
+    recordRuntimeError('Listar pastas PDF Drive',e?.message||String(e));
+    drivePdfStatusMsg('Erro ao carregar pastas do Drive: '+(e?.message||String(e)),'err');
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
+async function startDrivePdfUpload(){
+  if(state.drivePdfUploading)return;
+  if(!state.drivePdfFoldersLoaded){
+    await loadDrivePdfFolders();
+  }
+  const targetFolderId=String($('drivePdfTargetFolder')?.value||'').trim();
+  if(!targetFolderId){
+    drivePdfStatusMsg('Selecione uma pasta de destino no Google Drive antes de enviar.','warn');
+    return;
+  }
+  const createNew=Boolean($('drivePdfCreateNewFolder')?.checked);
+  const newFolderSegs=drivePdfParseNewFolderSegments();
+  if(createNew&&!newFolderSegs.length){
+    drivePdfStatusMsg('Você marcou "Criar nova pasta", mas não digitou o nome da nova pasta.','warn');
+    $('drivePdfNewFolderName')?.focus();
+    return;
+  }
+  const uploadItems=(state.drivePdfQueue||[]).filter(item=>(Number(item.size)||0)>0&&(Number(item.size)||0)<=DRIVE_PDF_MAX_BYTES);
+  if(!uploadItems.length){
+    drivePdfStatusMsg('Não há nenhum PDF válido (até 25 MB) na fila para enviar.','warn');
+    return;
+  }
+
+  state.drivePdfUploading=true;
+  const startBtn=$('drivePdfStartUploadBtn');
+  const progressBox=$('drivePdfUploadProgress');
+  const progressBar=$('drivePdfUploadBar');
+  const progressPct=$('drivePdfUploadPercent');
+  const progressLbl=$('drivePdfUploadLabel');
+  const progressDetail=$('drivePdfUploadDetail');
+  if(startBtn)startBtn.disabled=true;
+  if(progressBox)progressBox.classList.remove('hidden');
+  renderDrivePdfQueuePreview();
+
+  const newFolderPath=newFolderSegs.join('/');
+  const replaceExisting=Boolean($('drivePdfReplaceExisting')?.checked);
+  let sentCount=0;
+  let replacedCount=0;
+  let skippedCount=0;
+  const failedIds=new Set();
+  const errors=[];
+
+  try{
+    for(let i=0;i<uploadItems.length;i++){
+      const item=uploadItems[i];
+      const pct=Math.round((i/uploadItems.length)*100);
+      if(progressBar)progressBar.style.width=pct+'%';
+      if(progressPct)progressPct.textContent=pct+'%';
+      if(progressLbl)progressLbl.textContent=`Enviando ${i+1} de ${uploadItems.length}: ${item.name}`;
+      if(progressDetail)progressDetail.textContent=drivePdfFormatBytes(item.size);
+      drivePdfStatusMsg(`Enviando PDF ${i+1} de ${uploadItems.length}: ${item.name}…`);
+
+      try{
+        const base64=await drivePdfReadFileAsBase64(item.file);
+        const relFolders=drivePdfGetItemRelFolders(item);
+        const res=await apiCall('editorUploadDrivePdf',{
+          rootFolderId:state.drivePdfRootFolderId,
+          targetFolderId,
+          newFolderPath,
+          relativeFolders:relFolders,
+          fileName:item.name,
+          base64,
+          replaceExisting
+        },180000);
+        if(res?.skipped)skippedCount++;
+        else if(res?.replaced)replacedCount++;
+        else sentCount++;
+      }catch(err){
+        failedIds.add(item.id);
+        errors.push(`${item.name}: ${err?.message||String(err)}`);
+      }
+    }
+
+    if(progressBar)progressBar.style.width='100%';
+    if(progressPct)progressPct.textContent='100%';
+
+    const changedTotal=sentCount+replacedCount;
+    let syncMsg='';
+    if(changedTotal>0){
+      if(progressLbl)progressLbl.textContent='Sincronizando catálogo do site (Imersão Videoaulas)…';
+      if(progressDetail)progressDetail.textContent='Atualizando árvore de pastas e Materiais PDF…';
+      try{
+        await apiCall('syncAulasDrive',{},180000);
+        syncMsg=' Catálogo do site sincronizado ✓';
+      }catch(syncErr){
+        syncMsg=' (PDF salvo no Drive, mas a sincronização automática falhou: '+(syncErr?.message||String(syncErr))+'. Clique em Sincronizar no site.)';
+      }
+      await loadDrivePdfFolders();
+    }
+
+    const uploadedIdSet=new Set(uploadItems.filter(it=>!failedIds.has(it.id)).map(it=>it.id));
+    state.drivePdfQueue=state.drivePdfQueue.filter(it=>!uploadedIdSet.has(it.id));
+
+    const summaryParts=[];
+    if(sentCount)summaryParts.push(`${sentCount} enviado(s)`);
+    if(replacedCount)summaryParts.push(`${replacedCount} substituído(s)`);
+    if(skippedCount)summaryParts.push(`${skippedCount} já existente(s) mantido(s)`);
+    if(failedIds.size)summaryParts.push(`${failedIds.size} com erro`);
+    const summaryText=(summaryParts.join(', ')||'Concluído')+'.'+syncMsg;
+    if(progressLbl)progressLbl.textContent=failedIds.size?'Envio concluído com avisos':'Envio concluído com sucesso ✓';
+    if(progressDetail)progressDetail.textContent=errors.length?errors.slice(0,3).join(' | '):summaryText;
+    drivePdfStatusMsg(summaryText,failedIds.size?(changedTotal?'warn':'err'):'ok');
+  }finally{
+    state.drivePdfUploading=false;
+    renderDrivePdfQueuePreview();
+  }
+}
+
+$('scrollToDrivePdfUploaderBtn')?.addEventListener('click',()=>{
+  $('drivePdfUploaderPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
+  if(!state.drivePdfFoldersLoaded&&getEditorSessionToken())loadDrivePdfFolders();
+});
+$('reloadDrivePdfFolders')?.addEventListener('click',loadDrivePdfFolders);
+$('drivePdfTargetFolder')?.addEventListener('change',updateDrivePdfDestPreview);
+$('drivePdfCreateNewFolder')?.addEventListener('change',e=>{
+  $('drivePdfNewFolderWrap')?.classList.toggle('hidden',!e.target.checked);
+  if(e.target.checked)$('drivePdfNewFolderName')?.focus();
+  updateDrivePdfDestPreview();
+});
+$('drivePdfNewFolderName')?.addEventListener('input',updateDrivePdfDestPreview);
+$('drivePdfIncludeRootFolder')?.addEventListener('change',()=>{
+  updateDrivePdfDestPreview();
+  renderDrivePdfQueuePreview();
+});
+$('drivePdfPickFolderBtn')?.addEventListener('click',()=>{
+  const inp=$('drivePdfFolderInput');
+  if(!inp)return;
+  inp.value='';
+  inp.click();
+});
+$('drivePdfPickFilesBtn')?.addEventListener('click',()=>{
+  const inp=$('drivePdfFilesInput');
+  if(!inp)return;
+  inp.value='';
+  inp.click();
+});
+$('drivePdfFolderInput')?.addEventListener('change',e=>{
+  enqueueDrivePdfFiles(e.target.files,true);
+  e.target.value='';
+});
+$('drivePdfFilesInput')?.addEventListener('change',e=>{
+  enqueueDrivePdfFiles(e.target.files,false);
+  e.target.value='';
+});
+$('drivePdfClearQueueBtn')?.addEventListener('click',()=>{
+  if(state.drivePdfUploading)return;
+  state.drivePdfQueue=[];
+  renderDrivePdfQueuePreview();
+  drivePdfStatusMsg('Fila limpa.');
+});
+$('drivePdfTreePreview')?.addEventListener('click',e=>{
+  if(state.drivePdfUploading)return;
+  const btn=e.target.closest('[data-drive-pdf-remove]');
+  if(!btn)return;
+  const idx=Number(btn.dataset.drivePdfRemove);
+  if(Number.isInteger(idx)&&idx>=0&&idx<state.drivePdfQueue.length){
+    state.drivePdfQueue.splice(idx,1);
+    renderDrivePdfQueuePreview();
+  }
+});
+$('drivePdfStartUploadBtn')?.addEventListener('click',startDrivePdfUpload);
 
 fcRefreshSpecialtySelects();
 verifyEditorAuth();
